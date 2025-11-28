@@ -87,6 +87,10 @@ def highlight_row(row):
 def index():
     return render_template("index.html")
 
+@app.route("/health")
+def health():
+    return {"status": "ok", "version": "1.5", "deployed": "2025-11-28 15:25"}
+
 @app.route("/mapping")
 def mapping_page():
     return render_template("mapping.html")

@@ -397,7 +397,9 @@ def process_report1():
         return send_file(excel_output, as_attachment=True, download_name=f"OSG_Sales_Report_{datetime.now().strftime('%Y%m%d')}.xlsx", mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
     except Exception as e:
-        return f"Error processing report: {str(e)}", 500
+        import traceback
+        error_details = traceback.format_exc()
+        return f"<h1>Error processing report</h1><pre>{error_details}</pre>", 500
 
 # ---------------------------------------------------------
 # PROCESS: REPORT 2 (DAY VIEW)
@@ -490,7 +492,9 @@ def process_report2():
         return send_file(output, as_attachment=True, download_name=f"Store_Summary_{formatted_date}_{time_slot}.xlsx", mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
     except Exception as e:
-        return f"Error processing report: {str(e)}", 500
+        import traceback
+        error_details = traceback.format_exc()
+        return f"<h1>Error processing report</h1><pre>{error_details}</pre>", 500
 
 if __name__ == "__main__":
     app.run()

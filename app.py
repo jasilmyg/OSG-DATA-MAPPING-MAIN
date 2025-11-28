@@ -5,6 +5,7 @@ from flask import Flask, request, render_template, send_file, redirect, url_for
 from io import BytesIO
 from datetime import datetime
 import pytz
+import xlsxwriter
 from openpyxl import Workbook
 from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
 from openpyxl.utils.dataframe import dataframe_to_rows

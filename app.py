@@ -243,18 +243,59 @@ def process_report1():
         
         curr_osg_file = request.files['curr_osg_file']
         product_file = request.files['product_file']
+        prev_osg_file = request.files.get('prev_osg_file')
+        
         # Load master files from backend
         future_store_df = pd.read_excel("myG All Store.xlsx")
         rbm_df = pd.read_excel("RBM,BDM,BRANCH.xlsx")
         
         book1_df = pd.read_excel(curr_osg_file)
-        book1_df.rename(columns={'Branch': 'Store'}, inplace=True)
+        
+        # Ensure required columns exist in OSG file
+        if 'Branch' in book1_df.columns:
+            book1_df.rename(columns={'Branch': 'Store'}, inplace=True)
+        elif 'Store' not in book1_df.columns:
+            return "<h1>Error</h1><p>OSG file must have either 'Branch' or 'Store' column</p>", 400
+            
+        if 'DATE' not in book1_df.columns and 'Date' not in book1_df.columns:
+            return "<h1>Error</h1><p>OSG file must have 'DATE' or 'Date' column</p>", 400
+        if 'Date' in book1_df.columns:
+            book1_df.rename(columns={'Date': 'DATE'}, inplace=True)
+            
+        if 'QUANTITY' not in book1_df.columns and 'Quantity' not in book1_df.columns:
+            book1_df['QUANTITY'] = 1
+        elif 'Quantity' in book1_df.columns:
+            book1_df.rename(columns={'Quantity': 'QUANTITY'}, inplace=True)
+            
+        if 'AMOUNT' not in book1_df.columns and 'Amount' not in book1_df.columns:
+            return "<h1>Error</h1><p>OSG file must have 'AMOUNT' or 'Amount' column</p>", 400
+        if 'Amount' in book1_df.columns:
+            book1_df.rename(columns={'Amount': 'AMOUNT'}, inplace=True)
+        
         book1_df['DATE'] = pd.to_datetime(book1_df['DATE'], dayfirst=True, errors='coerce')
         book1_df = book1_df.dropna(subset=['DATE'])
         rbm_df.rename(columns={'Branch': 'Store'}, inplace=True)
 
         product_df = pd.read_excel(product_file)
-        product_df.rename(columns={'Branch': 'Store', 'Date': 'DATE', 'Sold Price': 'AMOUNT'}, inplace=True)
+        
+        # Ensure required columns exist in Product file
+        if 'Branch' in product_df.columns:
+            product_df.rename(columns={'Branch': 'Store'}, inplace=True)
+        elif 'Store' not in product_df.columns:
+            return "<h1>Error</h1><p>Product file must have either 'Branch' or 'Store' column</p>", 400
+            
+        if 'Date' in product_df.columns:
+            product_df.rename(columns={'Date': 'DATE'}, inplace=True)
+        elif 'DATE' not in product_df.columns:
+            return "<h1>Error</h1><p>Product file must have 'DATE' or 'Date' column</p>", 400
+            
+        if 'Sold Price' in product_df.columns:
+            product_df.rename(columns={'Sold Price': 'AMOUNT'}, inplace=True)
+        elif 'Amount' in product_df.columns:
+            product_df.rename(columns={'Amount': 'AMOUNT'}, inplace=True)
+        elif 'AMOUNT' not in product_df.columns:
+            return "<h1>Error</h1><p>Product file must have 'Sold Price', 'Amount', or 'AMOUNT' column</p>", 400
+        
         product_df['DATE'] = pd.to_datetime(product_df['DATE'], dayfirst=True, errors='coerce')
         product_df = product_df.dropna(subset=['DATE'])
         if 'QUANTITY' not in product_df.columns:

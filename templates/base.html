@@ -26,7 +26,7 @@
         }
 
         * {
-            box-sizing: border_box;
+            box-sizing: border-box;
             margin: 0;
             padding: 0;
         }
@@ -41,7 +41,6 @@
             flex-direction: column;
         }
 
-        /* Navbar */
         .navbar {
             background: var(--surface);
             border-bottom: 1px solid var(--border);
@@ -59,6 +58,7 @@
             font-size: 1.5rem;
             font-weight: 700;
             background: linear-gradient(135deg, var(--primary), var(--secondary));
+            background-clip: text;
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             text-decoration: none;
@@ -87,7 +87,6 @@
             color: var(--primary);
         }
 
-        /* Main Content */
         .main-content {
             flex: 1;
             padding: 2rem;
@@ -96,7 +95,6 @@
             width: 100%;
         }
 
-        /* Cards */
         .card {
             background: var(--surface);
             border-radius: 1rem;
@@ -128,7 +126,6 @@
             font-size: 1.1rem;
         }
 
-        /* Forms */
         .form-group {
             margin-bottom: 1.5rem;
         }
@@ -156,7 +153,6 @@
             box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
         }
 
-        /* File Upload */
         .file-upload {
             border: 2px dashed var(--border);
             border-radius: 0.75rem;
@@ -196,7 +192,6 @@
             font-weight: 500;
         }
 
-        /* Buttons */
         .btn {
             display: inline-flex;
             align-items: center;
@@ -225,28 +220,10 @@
             width: 100%;
         }
 
-        /* Grid */
         .grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
             gap: 2rem;
-        }
-
-        /* Loading Spinner */
-        .spinner {
-            display: none;
-            width: 1.5rem;
-            height: 1.5rem;
-            border: 3px solid rgba(255, 255, 255, 0.3);
-            border-radius: 50%;
-            border-top-color: white;
-            animation: spin 1s linear infinite;
-        }
-
-        @keyframes spin {
-            to {
-                transform: rotate(360deg);
-            }
         }
 
         .alert {
@@ -283,16 +260,15 @@
     </main>
 
     <script>
-        // File Upload Logic
         document.querySelectorAll('input[type="file"]').forEach(input => {
             input.addEventListener('change', function (e) {
                 const fileName = e.target.files[0]?.name;
                 const wrapper = e.target.closest('.file-upload');
-                const nameDisplay = wrapper.querySelector('.file-name');
-                const msgDisplay = wrapper.querySelector('.file-msg');
+                const nameDisplay = wrapper?.querySelector('.file-name');
+                const msgDisplay = wrapper?.querySelector('.file-msg');
 
-                if (fileName) {
-                    nameDisplay.textContent = fileName;
+                if (fileName && wrapper) {
+                    if (nameDisplay) nameDisplay.textContent = fileName;
                     if (msgDisplay) msgDisplay.style.display = 'none';
                     wrapper.style.borderColor = 'var(--success)';
                     wrapper.style.background = '#f0fdf4';
@@ -300,15 +276,135 @@
             });
         });
 
-        // Form Submit Logic
-        document.querySelectorAll('form').forEach(form => {
-            form.addEventListener('submit', function () {
-                const btn = this.querySelector('button[type="submit"]');
-                if (btn) {
-                    const originalText = btn.innerHTML;
-                    btn.disabled = true;
-                    btn.innerHTML = '<div class="spinner" style="display:block"></div> Processing...';
-                }
+        document.addEventListener('DOMContentLoaded', function () {
+            const forms = document.querySelectorAll('form');
+
+            forms.forEach(form => {
+                form.addEventListener('submit', function (e) {
+                    e.preventDefault();
+
+                    const formData = new FormData(this);
+                    const xhr = new XMLHttpRequest();
+                    const submitBtn = this.querySelector('button[type="submit"]');
+                    const originalBtnText = submitBtn ? submitBtn.innerHTML : '';
+
+                    let progressWrapper = document.getElementById('progress-wrapper');
+                    if (!progressWrapper) {
+                        const div = document.createElement('div');
+                        div.id = 'progress-wrapper';
+                        div.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.8);z-index:9999;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(5px);';
+                        div.innerHTML = `
+                            <div style="background:white;padding:2.5rem;border-radius:1rem;width:90%;max-width:500px;text-align:center;box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.3);">
+                                <h3 style="margin-bottom:1.5rem;color:#0f172a;font-size:1.5rem;">Uploading & Processing</h3>
+                                <div style="background:#e2e8f0;border-radius:1rem;height:2rem;overflow:hidden;margin-bottom:1rem;">
+                                    <div id="progress-bar" style="background:linear-gradient(90deg, #4f46e5, #0ea5e9);width:0%;height:100%;transition:width 0.3s;display:flex;align-items:center;justify-content:center;color:white;font-weight:600;font-size:0.9rem;"></div>
+                                </div>
+                                <div id="progress-text" style="font-weight:700;color:#4f46e5;font-size:1.25rem;margin-bottom:0.5rem;">0%</div>
+                                <p id="progress-status" style="font-size:0.95rem;color:#64748b;">Preparing upload...</p>
+                            </div>
+                        `;
+                        document.body.appendChild(div);
+                        progressWrapper = div;
+                    }
+
+                    progressWrapper.style.display = 'flex';
+                    const progressBar = document.getElementById('progress-bar');
+                    const progressText = document.getElementById('progress-text');
+                    const progressStatus = document.getElementById('progress-status');
+
+                    xhr.open(this.method, this.action, true);
+                    xhr.responseType = 'blob';
+
+                    xhr.upload.onprogress = function (e) {
+                        if (e.lengthComputable) {
+                            const percentComplete = Math.round((e.loaded / e.total) * 100);
+                            progressBar.style.width = percentComplete + '%';
+                            progressBar.textContent = percentComplete + '%';
+                            progressText.textContent = percentComplete + '%';
+                            progressStatus.textContent = 'Uploading files...';
+
+                            if (percentComplete >= 99) {
+                                progressStatus.textContent = 'Processing data on server... Please wait, this may take a few minutes.';
+                            }
+                        }
+                    };
+
+                    xhr.onload = function () {
+                        if (this.status === 200) {
+                            progressBar.style.width = '100%';
+                            progressBar.textContent = '100%';
+                            progressText.textContent = '100%';
+                            progressStatus.textContent = 'Download starting...';
+
+                            const blob = this.response;
+                            const downloadUrl = window.URL.createObjectURL(blob);
+                            const a = document.createElement("a");
+                            a.href = downloadUrl;
+
+                            const contentDisposition = xhr.getResponseHeader('Content-Disposition');
+                            let fileName = 'report.xlsx';
+                            if (contentDisposition) {
+                                const fileNameMatch = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
+                                if (fileNameMatch && fileNameMatch[1]) {
+                                    fileName = fileNameMatch[1].replace(/['"]/g, '');
+                                }
+                            }
+
+                            a.download = fileName;
+                            document.body.appendChild(a);
+                            a.click();
+                            window.URL.revokeObjectURL(downloadUrl);
+                            document.body.removeChild(a);
+
+                            setTimeout(() => {
+                                progressWrapper.style.display = 'none';
+                                progressBar.style.width = '0%';
+                                progressBar.textContent = '';
+                            }, 1500);
+                        } else {
+                            const reader = new FileReader();
+                            reader.onload = function () {
+                                progressWrapper.style.display = 'none';
+                                const errorDiv = document.createElement('div');
+                                errorDiv.innerHTML = reader.result;
+                                document.body.innerHTML = '';
+                                document.body.appendChild(errorDiv);
+                            }
+                            reader.readAsText(this.response);
+                        }
+
+                        if (submitBtn) {
+                            submitBtn.disabled = false;
+                            submitBtn.innerHTML = originalBtnText;
+                        }
+                    };
+
+                    xhr.onerror = function () {
+                        alert("Network error occurred. Please check your connection and try again.");
+                        progressWrapper.style.display = 'none';
+                        if (submitBtn) {
+                            submitBtn.disabled = false;
+                            submitBtn.innerHTML = originalBtnText;
+                        }
+                    };
+
+                    xhr.ontimeout = function () {
+                        alert("Upload timed out. The file may be too large or your connection is slow.");
+                        progressWrapper.style.display = 'none';
+                        if (submitBtn) {
+                            submitBtn.disabled = false;
+                            submitBtn.innerHTML = originalBtnText;
+                        }
+                    };
+
+                    if (submitBtn) {
+                        submitBtn.disabled = true;
+                        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing...';
+                    }
+
+                    xhr.timeout = 300000; // 5 minutes timeout
+                    xhr.send(formData);
+                });
             });
         });
     </script>

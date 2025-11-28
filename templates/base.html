@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}OSG Dashboard{% endblock %}</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #4f46e5;
+            --primary-dark: #4338ca;
+            --secondary: #0ea5e9;
+            --accent: #8b5cf6;
+            --background: #f8fafc;
+            --surface: #ffffff;
+            --text-main: #0f172a;
+            --text-light: #64748b;
+            --border: #e2e8f0;
+            --success: #10b981;
+            --danger: #ef4444;
+            --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+            --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+            --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+        }
+
+        * {
+            box-sizing: border_box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Outfit', sans-serif;
+            background-color: var(--background);
+            color: var(--text-main);
+            line-height: 1.6;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Navbar */
+        .navbar {
+            background: var(--surface);
+            border-bottom: 1px solid var(--border);
+            padding: 1rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            box-shadow: var(--shadow-sm);
+        }
+
+        .nav-brand {
+            font-size: 1.5rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 1.5rem;
+        }
+
+        .nav-link {
+            text-decoration: none;
+            color: var(--text-light);
+            font-weight: 500;
+            transition: color 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .nav-link:hover,
+        .nav-link.active {
+            color: var(--primary);
+        }
+
+        /* Main Content */
+        .main-content {
+            flex: 1;
+            padding: 2rem;
+            max-width: 1200px;
+            margin: 0 auto;
+            width: 100%;
+        }
+
+        /* Cards */
+        .card {
+            background: var(--surface);
+            border-radius: 1rem;
+            border: 1px solid var(--border);
+            padding: 2rem;
+            box-shadow: var(--shadow-md);
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .card:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-lg);
+        }
+
+        .page-header {
+            margin-bottom: 2rem;
+            text-align: center;
+        }
+
+        .page-title {
+            font-size: 2rem;
+            font-weight: 700;
+            color: var(--text-main);
+            margin-bottom: 0.5rem;
+        }
+
+        .page-subtitle {
+            color: var(--text-light);
+            font-size: 1.1rem;
+        }
+
+        /* Forms */
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+
+        .form-label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 500;
+            color: var(--text-main);
+        }
+
+        .form-control {
+            width: 100%;
+            padding: 0.75rem;
+            border: 1px solid var(--border);
+            border-radius: 0.5rem;
+            font-family: inherit;
+            font-size: 1rem;
+            transition: border-color 0.2s;
+        }
+
+        .form-control:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+        }
+
+        /* File Upload */
+        .file-upload {
+            border: 2px dashed var(--border);
+            border-radius: 0.75rem;
+            padding: 2rem;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s;
+            background: #f8fafc;
+            position: relative;
+        }
+
+        .file-upload:hover {
+            border-color: var(--primary);
+            background: #eef2ff;
+        }
+
+        .file-upload input[type="file"] {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            opacity: 0;
+            cursor: pointer;
+        }
+
+        .file-icon {
+            font-size: 2rem;
+            color: var(--text-light);
+            margin-bottom: 0.5rem;
+        }
+
+        .file-name {
+            margin-top: 0.5rem;
+            font-size: 0.9rem;
+            color: var(--primary);
+            font-weight: 500;
+        }
+
+        /* Buttons */
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0.75rem 1.5rem;
+            border-radius: 0.5rem;
+            font-weight: 600;
+            text-decoration: none;
+            transition: all 0.2s;
+            border: none;
+            cursor: pointer;
+            font-size: 1rem;
+            gap: 0.5rem;
+        }
+
+        .btn-primary {
+            background: var(--primary);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: var(--primary-dark);
+        }
+
+        .btn-block {
+            width: 100%;
+        }
+
+        /* Grid */
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 2rem;
+        }
+
+        /* Loading Spinner */
+        .spinner {
+            display: none;
+            width: 1.5rem;
+            height: 1.5rem;
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top-color: white;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        .alert {
+            padding: 1rem;
+            border-radius: 0.5rem;
+            margin-bottom: 1rem;
+            border-left: 4px solid;
+        }
+
+        .alert-info {
+            background: #eff6ff;
+            border-color: var(--primary);
+            color: #1e40af;
+        }
+    </style>
+</head>
+
+<body>
+    <nav class="navbar">
+        <a href="/" class="nav-brand">
+            <i class="fas fa-layer-group"></i>
+            OSG Dashboard
+        </a>
+        <div class="nav-links">
+            <a href="/" class="nav-link"><i class="fas fa-home"></i> Home</a>
+            <a href="/mapping" class="nav-link"><i class="fas fa-exchange-alt"></i> Data Mapping</a>
+            <a href="/report1" class="nav-link"><i class="fas fa-chart-line"></i> Sales Report</a>
+            <a href="/report2" class="nav-link"><i class="fas fa-clock"></i> Day View</a>
+        </div>
+    </nav>
+
+    <main class="main-content">
+        {% block content %}{% endblock %}
+    </main>
+
+    <script>
+        // File Upload Logic
+        document.querySelectorAll('input[type="file"]').forEach(input => {
+            input.addEventListener('change', function (e) {
+                const fileName = e.target.files[0]?.name;
+                const wrapper = e.target.closest('.file-upload');
+                const nameDisplay = wrapper.querySelector('.file-name');
+                const msgDisplay = wrapper.querySelector('.file-msg');
+
+                if (fileName) {
+                    nameDisplay.textContent = fileName;
+                    if (msgDisplay) msgDisplay.style.display = 'none';
+                    wrapper.style.borderColor = 'var(--success)';
+                    wrapper.style.background = '#f0fdf4';
+                }
+            });
+        });
+
+        // Form Submit Logic
+        document.querySelectorAll('form').forEach(form => {
+            form.addEventListener('submit', function () {
+                const btn = this.querySelector('button[type="submit"]');
+                if (btn) {
+                    const originalText = btn.innerHTML;
+                    btn.disabled = true;
+                    btn.innerHTML = '<div class="spinner" style="display:block"></div> Processing...';
+                }
+            });
+        });
+    </script>
+</body>
+
+</html>

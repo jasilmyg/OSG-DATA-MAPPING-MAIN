@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+
+{% block title %}Sales Report - OSG Dashboard{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1 class="page-title">OSG Sales Report</h1>
+    <p class="page-subtitle">Generate comprehensive sales performance reports</p>
+</div>
+
+<form action="/process_report1" method="post" enctype="multipart/form-data">
+    <div class="grid">
+        <!-- Main Data -->
+        <div class="card">
+            <h3 style="margin-bottom: 1.5rem; color: var(--primary);"><i class="fas fa-calendar-alt"></i> Date Selection
+            </h3>
+            <div class="form-group">
+                <label class="form-label">Current Report Date</label>
+                <input type="date" name="report_date" class="form-control" required value="{{ today }}">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Previous Report Date (Comparison)</label>
+                <input type="date" name="prev_date" class="form-control" required value="{{ first_of_month }}">
+            </div>
+        </div>
+
+        <!-- Master Files -->
+        <div class="card">
+            <h3 style="margin-bottom: 1.5rem; color: var(--accent);"><i class="fas fa-database"></i> Master Files</h3>
+            <div class="alert alert-info">
+                <small><i class="fas fa-info-circle"></i> Upload master data files here.</small>
+            </div>
+            <div class="form-group">
+                <label class="form-label">myG All Store List</label>
+                <input type="file" name="store_list_file" class="form-control" required accept=".xlsx">
+            </div>
+            <div class="form-group">
+                <label class="form-label">RBM, BDM, Branch List</label>
+                <input type="file" name="rbm_file" class="form-control" required accept=".xlsx">
+            </div>
+        </div>
+    </div>
+
+    <div class="card" style="margin-top: 2rem;">
+        <h3 style="margin-bottom: 1.5rem; color: var(--secondary);"><i class="fas fa-file-upload"></i> Sales Data</h3>
+
+        <div class="grid">
+            <div class="form-group">
+                <label class="form-label">Current Month OSG Sales</label>
+                <div class="file-upload">
+                    <i class="fas fa-file-invoice-dollar file-icon"></i>
+                    <div class="file-msg">Upload Current OSG Data</div>
+                    <div class="file-name"></div>
+                    <input type="file" name="curr_osg_file" required accept=".xlsx">
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Previous Month OSG Sales</label>
+                <div class="file-upload">
+                    <i class="fas fa-history file-icon"></i>
+                    <div class="file-msg">Upload Previous OSG Data</div>
+                    <div class="file-name"></div>
+                    <input type="file" name="prev_osg_file" accept=".xlsx">
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Current Product Sales</label>
+                <div class="file-upload">
+                    <i class="fas fa-tags file-icon"></i>
+                    <div class="file-msg">Upload Product Sales Data</div>
+                    <div class="file-name"></div>
+                    <input type="file" name="product_file" required accept=".xlsx">
+                </div>
+            </div>
+        </div>
+
+        <button type="submit" class="btn btn-primary btn-block" style="margin-top: 2rem; background: var(--secondary);">
+            <i class="fas fa-magic"></i> Generate Report
+        </button>
+    </div>
+</form>
+{% endblock %}

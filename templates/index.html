@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="page-header">
+    <h1 class="page-title">Welcome to OSG Dashboard</h1>
+    <p class="page-subtitle">Select a tool to get started</p>
+</div>
+
+<div class="grid">
+    <!-- Card 1: Data Mapping -->
+    <div class="card">
+        <div style="font-size: 3rem; color: var(--primary); margin-bottom: 1rem; text-align: center;">
+            <i class="fas fa-exchange-alt"></i>
+        </div>
+        <h2 style="text-align: center; margin-bottom: 1rem;">Data Mapping</h2>
+        <p style="color: var(--text-light); text-align: center; margin-bottom: 2rem;">
+            Map OSG sales data with Product data to generate a consolidated Excel file with model matching logic.
+        </p>
+        <a href="/mapping" class="btn btn-primary btn-block">
+            Go to Mapping <i class="fas fa-arrow-right"></i>
+        </a>
+    </div>
+
+    <!-- Card 2: Sales Report -->
+    <div class="card">
+        <div style="font-size: 3rem; color: var(--secondary); margin-bottom: 1rem; text-align: center;">
+            <i class="fas fa-chart-line"></i>
+        </div>
+        <h2 style="text-align: center; margin-bottom: 1rem;">Sales Report</h2>
+        <p style="color: var(--text-light); text-align: center; margin-bottom: 2rem;">
+            Generate comprehensive sales reports with FTD/MTD comparisons, conversion rates, and RBM analysis.
+        </p>
+        <a href="/report1" class="btn btn-primary btn-block" style="background: var(--secondary);">
+            Go to Sales Report <i class="fas fa-arrow-right"></i>
+        </a>
+    </div>
+
+    <!-- Card 3: Day View -->
+    <div class="card">
+        <div style="font-size: 3rem; color: var(--accent); margin-bottom: 1rem; text-align: center;">
+            <i class="fas fa-clock"></i>
+        </div>
+        <h2 style="text-align: center; margin-bottom: 1rem;">Day View Report</h2>
+        <p style="color: var(--text-light); text-align: center; margin-bottom: 2rem;">
+            Create daily store summary reports for specific time slots with quantity and amount aggregations.
+        </p>
+        <a href="/report2" class="btn btn-primary btn-block" style="background: var(--accent);">
+            Go to Day View <i class="fas fa-arrow-right"></i>
+        </a>
+    </div>
+</div>
+{% endblock %}

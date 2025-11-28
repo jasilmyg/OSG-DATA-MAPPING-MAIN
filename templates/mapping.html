@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+
+{% block title %}Data Mapping - OSG Dashboard{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1 class="page-title">Data Mapping Tool</h1>
+    <p class="page-subtitle">Upload OSG and Product files to process mapping</p>
+</div>
+
+<div class="card" style="max-width: 600px; margin: 0 auto;">
+    <form action="/process_mapping" method="post" enctype="multipart/form-data">
+        <div class="form-group">
+            <label class="form-label">OSG File</label>
+            <div class="file-upload">
+                <i class="fas fa-file-excel file-icon"></i>
+                <div class="file-msg">Click to upload OSG Excel file</div>
+                <div class="file-name"></div>
+                <input type="file" name="osg_file" required accept=".xlsx, .xls">
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label class="form-label">Product File</label>
+            <div class="file-upload">
+                <i class="fas fa-file-excel file-icon"></i>
+                <div class="file-msg">Click to upload Product Excel file</div>
+                <div class="file-name"></div>
+                <input type="file" name="product_file" required accept=".xlsx, .xls">
+            </div>
+        </div>
+
+        <button type="submit" class="btn btn-primary btn-block">
+            <i class="fas fa-cogs"></i> Process Files
+        </button>
+    </form>
+</div>
+{% endblock %}

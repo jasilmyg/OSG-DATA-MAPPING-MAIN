@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+
+{% block title %}Day View Report - OSG Dashboard{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1 class="page-title">Day View Report</h1>
+    <p class="page-subtitle">Generate daily store summary reports</p>
+</div>
+
+<div class="card" style="max-width: 800px; margin: 0 auto;">
+    <form action="/process_report2" method="post" enctype="multipart/form-data">
+        <div class="grid">
+            <div class="form-group">
+                <label class="form-label">Report Date</label>
+                <input type="date" name="report_date" class="form-control" required value="{{ today }}">
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Time Slot</label>
+                <select name="time_slot" class="form-control">
+                    <option value="12:30PM">12:30 PM</option>
+                    <option value="1PM">1:00 PM</option>
+                    <option value="4PM">4:00 PM</option>
+                    <option value="6PM">6:00 PM</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label class="form-label">Future Store List (Master)</label>
+            <input type="file" name="future_store_file" class="form-control" required accept=".xlsx">
+        </div>
+
+        <div class="form-group">
+            <label class="form-label">Daily Sales Report</label>
+            <div class="file-upload">
+                <i class="fas fa-file-excel file-icon"></i>
+                <div class="file-msg">Upload Daily Sales Report</div>
+                <div class="file-name"></div>
+                <input type="file" name="sales_file" required accept=".xlsx">
+            </div>
+        </div>
+
+        <button type="submit" class="btn btn-primary btn-block" style="background: var(--accent);">
+            <i class="fas fa-bolt"></i> Generate View
+        </button>
+    </form>
+</div>
+{% endblock %}

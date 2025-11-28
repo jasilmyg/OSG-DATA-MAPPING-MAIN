@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OSG Data Mapping Tool</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary-color: #4f46e5;
+            --primary-hover: #4338ca;
+            --bg-gradient-start: #f3f4f6;
+            --bg-gradient-end: #e5e7eb;
+            --card-bg: #ffffff;
+            --text-main: #1f2937;
+            --text-secondary: #6b7280;
+            --border-color: #e5e7eb;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: linear-gradient(135deg, var(--bg-gradient-start), var(--bg-gradient-end));
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0;
+            color: var(--text-main);
+        }
+
+        .container {
+            background: var(--card-bg);
+            padding: 2.5rem;
+            border-radius: 1rem;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+            width: 100%;
+            max-width: 480px;
+            text-align: center;
+        }
+
+        h1 {
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+            color: var(--text-main);
+        }
+
+        p.subtitle {
+            color: var(--text-secondary);
+            margin-bottom: 2rem;
+            font-size: 0.95rem;
+        }
+
+        .form-group {
+            margin-bottom: 1.5rem;
+            text-align: left;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 500;
+            font-size: 0.9rem;
+            color: var(--text-main);
+        }
+
+        .file-input-wrapper {
+            position: relative;
+            border: 2px dashed var(--border-color);
+            border-radius: 0.5rem;
+            padding: 1.5rem;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            background: #f9fafb;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .file-input-wrapper:hover {
+            border-color: var(--primary-color);
+            background: #eff6ff;
+        }
+
+        .file-input-wrapper input[type="file"] {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            top: 0;
+            left: 0;
+            opacity: 0;
+            cursor: pointer;
+        }
+
+        .file-input-icon {
+            font-size: 1.5rem;
+            color: var(--text-secondary);
+            margin-bottom: 0.5rem;
+        }
+
+        .file-name {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            margin-top: 0.5rem;
+            word-break: break-all;
+        }
+
+        button {
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            padding: 0.75rem 1.5rem;
+            font-size: 1rem;
+            font-weight: 500;
+            border-radius: 0.5rem;
+            cursor: pointer;
+            width: 100%;
+            transition: background-color 0.2s;
+            margin-top: 1rem;
+        }
+
+        button:hover {
+            background-color: var(--primary-hover);
+        }
+
+        button:disabled {
+            background-color: #9ca3af;
+            cursor: not-allowed;
+        }
+
+        .spinner {
+            display: none;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top-color: white;
+            animation: spin 1s ease-in-out infinite;
+            margin: 0 auto;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        .btn-text {
+            display: inline-block;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="container">
+        <h1>Data Mapping Tool</h1>
+        <p class="subtitle">Upload your OSG and Product files to process.</p>
+
+        <form action="/process" method="post" enctype="multipart/form-data" id="uploadForm">
+            <div class="form-group">
+                <label>OSG File</label>
+                <div class="file-input-wrapper">
+                    <div class="file-input-icon">📂</div>
+                    <span class="file-msg">Click or drag to upload</span>
+                    <input type="file" name="osg_file" required accept=".xlsx, .xls" onchange="updateFileName(this)">
+                    <div class="file-name"></div>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Product File</label>
+                <div class="file-input-wrapper">
+                    <div class="file-input-icon">📊</div>
+                    <span class="file-msg">Click or drag to upload</span>
+                    <input type="file" name="product_file" required accept=".xlsx, .xls"
+                        onchange="updateFileName(this)">
+                    <div class="file-name"></div>
+                </div>
+            </div>
+
+            <button type="submit" id="submitBtn">
+                <span class="btn-text">Process Files</span>
+                <div class="spinner"></div>
+            </button>
+        </form>
+    </div>
+
+    <script>
+        function updateFileName(input) {
+            const fileNameDiv = input.parentElement.querySelector('.file-name');
+            if (input.files && input.files.length > 0) {
+                fileNameDiv.textContent = input.files[0].name;
+                input.parentElement.querySelector('.file-msg').style.display = 'none';
+            } else {
+                fileNameDiv.textContent = '';
+                input.parentElement.querySelector('.file-msg').style.display = 'block';
+            }
+        }
+
+        document.getElementById('uploadForm').addEventListener('submit', function () {
+            const btn = document.getElementById('submitBtn');
+            const text = btn.querySelector('.btn-text');
+            const spinner = btn.querySelector('.spinner');
+
+            btn.disabled = true;
+            text.style.display = 'none';
+            spinner.style.display = 'block';
+        });
+    </script>
+
+</body>
+
+</html>

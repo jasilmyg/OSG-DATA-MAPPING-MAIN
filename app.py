@@ -242,28 +242,43 @@ def process_mapping():
 
 @app.route("/process_report1", methods=["POST"])
 def process_report1():
+    import sys
+    import gc
     try:
-        print("=== START REPORT 1 PROCESSING ===")
-        print("Reading form data...")
+        print("=== START REPORT 1 PROCESSING (v1.6) ===", file=sys.stderr)
+        
+        # Check for xlsxwriter
+        try:
+            import xlsxwriter
+            print("xlsxwriter module found.", file=sys.stderr)
+        except ImportError:
+            print("CRITICAL: xlsxwriter module NOT found!", file=sys.stderr)
+            return "ERROR: xlsxwriter module is missing on the server.", 500
+
+        print("Reading form data...", file=sys.stderr)
         report_date = pd.to_datetime(request.form['report_date'])
         prev_date = pd.to_datetime(request.form['prev_date'])
-        print(f"Report date: {report_date}, Prev date: {prev_date}")
         
-        print("Reading uploaded files...")
+        print("Reading uploaded files...", file=sys.stderr)
         curr_osg_file = request.files['curr_osg_file']
         product_file = request.files['product_file']
         prev_osg_file = request.files.get('prev_osg_file')
-        print(f"Files received - OSG: {curr_osg_file.filename}, Product: {product_file.filename}, Prev: {prev_osg_file.filename if prev_osg_file else 'None'}")
         
-        print("Loading master files...")
+        print("Loading master files...", file=sys.stderr)
         # Load master files from backend
-        future_store_df = pd.read_excel("myG All Store.xlsx")
-        rbm_df = pd.read_excel("RBM,BDM,BRANCH.xlsx")
-        print(f"Master files loaded - Stores: {len(future_store_df)}, RBM: {len(rbm_df)}")
+        try:
+            future_store_df = pd.read_excel("myG All Store.xlsx", engine='openpyxl')
+            rbm_df = pd.read_excel("RBM,BDM,BRANCH.xlsx", engine='openpyxl')
+            print(f"Master files loaded - Stores: {len(future_store_df)}, RBM: {len(rbm_df)}", file=sys.stderr)
+        except Exception as e:
+            print(f"Error loading master files: {e}", file=sys.stderr)
+            return f"ERROR loading master files: {e}", 500
         
         print("Reading OSG file...")
         
         book1_df = pd.read_excel(curr_osg_file)
+        print(f"OSG file read successfully. Shape: {book1_df.shape}")
+        print(f"OSG Columns: {list(book1_df.columns)}")
         
         # Ensure required columns exist in OSG file
         if 'Branch' in book1_df.columns:
@@ -454,34 +469,11 @@ def process_report1():
     except Exception as e:
         import traceback
         error_details = traceback.format_exc()
-        print("ERROR IN REPORT 1:")
-        print(error_details)
-        return f"""
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <title>Error - OSG Sales Report</title>
-            <style>
-                body {{ font-family: Arial, sans-serif; padding: 2rem; background: #f8f9fa; }}
-                .error-container {{ background: white; padding: 2rem; border-radius: 8px; max-width: 1000px; margin: 0 auto; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }}
-                h1 {{ color: #dc3545; }}
-                pre {{ background: #f8f9fa; padding: 1rem; border-radius: 4px; overflow-x: auto; border-left: 4px solid #dc3545; }}
-                .error-msg {{ color: #721c24; background: #f8d7da; padding: 1rem; border-radius: 4px; margin: 1rem 0; }}
-            </style>
-        </head>
-        <body>
-            <div class="error-container">
-                <h1>⚠️ Error Processing Sales Report</h1>
-                <div class="error-msg">
-                    <strong>Error:</strong> {str(e)}
-                </div>
-                <h3>Full Stack Trace:</h3>
-                <pre>{error_details}</pre>
-                <p><a href="/report1">← Go Back</a></p>
-            </div>
-        </body>
-        </html>
-        """, 500
+        print("=" * 80, file=sys.stderr)
+        print("ERROR IN REPORT 1:", file=sys.stderr)
+        print(error_details, file=sys.stderr)
+        print("=" * 80, file=sys.stderr)
+        return f"ERROR PROCESSING REPORT:\n{error_details}", 500
 
 # ---------------------------------------------------------
 # PROCESS: REPORT 2 (DAY VIEW)

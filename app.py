@@ -243,13 +243,9 @@ def process_report1():
         
         curr_osg_file = request.files['curr_osg_file']
         product_file = request.files['product_file']
-        store_list_file = request.files['store_list_file']
-        rbm_file = request.files['rbm_file']
-        
-        prev_osg_file = request.files.get('prev_osg_file')
-
-        future_store_df = pd.read_excel(store_list_file)
-        rbm_df = pd.read_excel(rbm_file)
+        # Load master files from backend
+        future_store_df = pd.read_excel("myG All Store.xlsx")
+        rbm_df = pd.read_excel("RBM,BDM,BRANCH.xlsx")
         
         book1_df = pd.read_excel(curr_osg_file)
         book1_df.rename(columns={'Branch': 'Store'}, inplace=True)
@@ -413,12 +409,11 @@ def process_report2():
         report_date = pd.to_datetime(request.form['report_date'])
         time_slot = request.form['time_slot']
         sales_file = request.files['sales_file']
-        future_store_file = request.files['future_store_file']
 
         formatted_date = report_date.strftime("%d-%m-%Y")
         report_title = f"{formatted_date} EW Sale Till {time_slot}"
 
-        future_df = pd.read_excel(future_store_file)
+        future_df = pd.read_excel("Future Store List.xlsx")
         book2_df = pd.read_excel(sales_file)
         book2_df.rename(columns={'Branch': 'Store'}, inplace=True)
 

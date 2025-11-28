@@ -449,7 +449,34 @@ def process_report1():
     except Exception as e:
         import traceback
         error_details = traceback.format_exc()
-        return f"<h1>Error processing report</h1><pre>{error_details}</pre>", 500
+        print("ERROR IN REPORT 1:")
+        print(error_details)
+        return f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Error - OSG Sales Report</title>
+            <style>
+                body {{ font-family: Arial, sans-serif; padding: 2rem; background: #f8f9fa; }}
+                .error-container {{ background: white; padding: 2rem; border-radius: 8px; max-width: 1000px; margin: 0 auto; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }}
+                h1 {{ color: #dc3545; }}
+                pre {{ background: #f8f9fa; padding: 1rem; border-radius: 4px; overflow-x: auto; border-left: 4px solid #dc3545; }}
+                .error-msg {{ color: #721c24; background: #f8d7da; padding: 1rem; border-radius: 4px; margin: 1rem 0; }}
+            </style>
+        </head>
+        <body>
+            <div class="error-container">
+                <h1>⚠️ Error Processing Sales Report</h1>
+                <div class="error-msg">
+                    <strong>Error:</strong> {str(e)}
+                </div>
+                <h3>Full Stack Trace:</h3>
+                <pre>{error_details}</pre>
+                <p><a href="/report1">← Go Back</a></p>
+            </div>
+        </body>
+        </html>
+        """, 500
 
 # ---------------------------------------------------------
 # PROCESS: REPORT 2 (DAY VIEW)
@@ -544,7 +571,34 @@ def process_report2():
     except Exception as e:
         import traceback
         error_details = traceback.format_exc()
-        return f"<h1>Error processing report</h1><pre>{error_details}</pre>", 500
+        print("ERROR IN REPORT 2:")
+        print(error_details)
+        return f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Error - Day View Report</title>
+            <style>
+                body {{ font-family: Arial, sans-serif; padding: 2rem; background: #f8f9fa; }}
+                .error-container {{ background: white; padding: 2rem; border-radius: 8px; max-width: 1000px; margin: 0 auto; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }}
+                h1 {{ color: #dc3545; }}
+                pre {{ background: #f8f9fa; padding: 1rem; border-radius: 4px; overflow-x: auto; border-left: 4px solid #dc3545; }}
+                .error-msg {{ color: #721c24; background: #f8d7da; padding: 1rem; border-radius: 4px; margin: 1rem 0; }}
+            </style>
+        </head>
+        <body>
+            <div class="error-container">
+                <h1>⚠️ Error Processing Day View Report</h1>
+                <div class="error-msg">
+                    <strong>Error:</strong> {str(e)}
+                </div>
+                <h3>Full Stack Trace:</h3>
+                <pre>{error_details}</pre>
+                <p><a href="/report2">← Go Back</a></p>
+            </div>
+        </body>
+        </html>
+        """, 500
 
 if __name__ == "__main__":
     app.run()

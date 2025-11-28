@@ -276,81 +276,102 @@ def process_report1():
         
         print("Reading OSG file...")
         
-        book1_df = pd.read_excel(curr_osg_file)
-        print(f"OSG file read successfully. Shape: {book1_df.shape}")
-        print(f"OSG Columns: {list(book1_df.columns)}")
+        # ... (Previous code for reading OSG file) ...
+        book1_df = pd.read_excel(curr_osg_file, engine='openpyxl')
+        print(f"OSG file read. Shape: {book1_df.shape}", file=sys.stderr)
         
-        # Ensure required columns exist in OSG file
-        if 'Branch' in book1_df.columns:
-            book1_df.rename(columns={'Branch': 'Store'}, inplace=True)
-        elif 'Store' not in book1_df.columns:
-            return "<h1>Error</h1><p>OSG file must have either 'Branch' or 'Store' column</p>", 400
-            
-        if 'DATE' not in book1_df.columns and 'Date' not in book1_df.columns:
-            return "<h1>Error</h1><p>OSG file must have 'DATE' or 'Date' column</p>", 400
-        if 'Date' in book1_df.columns:
-            book1_df.rename(columns={'Date': 'DATE'}, inplace=True)
-            
-        if 'QUANTITY' not in book1_df.columns and 'Quantity' not in book1_df.columns:
-            book1_df['QUANTITY'] = 1
-        elif 'Quantity' in book1_df.columns:
-            book1_df.rename(columns={'Quantity': 'QUANTITY'}, inplace=True)
-            
-        if 'AMOUNT' not in book1_df.columns and 'Amount' not in book1_df.columns:
-            return "<h1>Error</h1><p>OSG file must have 'AMOUNT' or 'Amount' column</p>", 400
-        if 'Amount' in book1_df.columns:
-            book1_df.rename(columns={'Amount': 'AMOUNT'}, inplace=True)
+        # Normalize OSG Columns
+        cols = book1_df.columns
+        if 'Branch' in cols: book1_df.rename(columns={'Branch': 'Store'}, inplace=True)
+        if 'Date' in cols: book1_df.rename(columns={'Date': 'DATE'}, inplace=True)
+        if 'Quantity' in cols: book1_df.rename(columns={'Quantity': 'QUANTITY'}, inplace=True)
+        if 'Amount' in cols: book1_df.rename(columns={'Amount': 'AMOUNT'}, inplace=True)
+        
+        # Validate OSG
+        if 'Store' not in book1_df.columns: return "Error: OSG file missing 'Branch' or 'Store'", 400
+        if 'DATE' not in book1_df.columns: return "Error: OSG file missing 'DATE'", 400
+        if 'AMOUNT' not in book1_df.columns: return "Error: OSG file missing 'AMOUNT'", 400
+        if 'QUANTITY' not in book1_df.columns: book1_df['QUANTITY'] = 1
         
         book1_df['DATE'] = pd.to_datetime(book1_df['DATE'], dayfirst=True, errors='coerce')
         book1_df = book1_df.dropna(subset=['DATE'])
-        rbm_df.rename(columns={'Branch': 'Store'}, inplace=True)
-
-        product_df = pd.read_excel(product_file)
         
-        # Ensure required columns exist in Product file
-        if 'Branch' in product_df.columns:
-            product_df.rename(columns={'Branch': 'Store'}, inplace=True)
-        elif 'Store' not in product_df.columns:
-            return "<h1>Error</h1><p>Product file must have either 'Branch' or 'Store' column</p>", 400
-            
-        if 'Date' in product_df.columns:
-            product_df.rename(columns={'Date': 'DATE'}, inplace=True)
-        elif 'DATE' not in product_df.columns:
-            return "<h1>Error</h1><p>Product file must have 'DATE' or 'Date' column</p>", 400
-            
-        if 'Sold Price' in product_df.columns:
-            product_df.rename(columns={'Sold Price': 'AMOUNT'}, inplace=True)
-        elif 'Amount' in product_df.columns:
-            product_df.rename(columns={'Amount': 'AMOUNT'}, inplace=True)
-        elif 'AMOUNT' not in product_df.columns:
-            return "<h1>Error</h1><p>Product file must have 'Sold Price', 'Amount', or 'AMOUNT' column</p>", 400
+        # Aggregates for OSG
+        mtd_df = book1_df[book1_df['DATE'].dt.month == report_date.month]
+        today_df = mtd_df[mtd_df['DATE'].dt.date == report_date.date()]
+        
+        today_agg = today_df.groupby('Store', as_index=False).agg({'QUANTITY': 'sum', 'AMOUNT': 'sum'}).rename(columns={'QUANTITY': 'FTD Count', 'AMOUNT': 'FTD Value'})
+        mtd_agg = mtd_df.groupby('Store', as_index=False).agg({'QUANTITY': 'sum', 'AMOUNT': 'sum'}).rename(columns={'QUANTITY': 'MTD Count', 'AMOUNT': 'MTD Value'})
+        
+        # MEMORY CLEANUP 1
+        print("Cleaning up OSG memory...", file=sys.stderr)
+        del book1_df
+        del mtd_df
+        del today_df
+        gc.collect()
+
+        # Process Product File
+        print("Reading Product file...", file=sys.stderr)
+        product_df = pd.read_excel(product_file, engine='openpyxl')
+        
+        # Normalize Product Columns
+        cols = product_df.columns
+        if 'Branch' in cols: product_df.rename(columns={'Branch': 'Store'}, inplace=True)
+        if 'Date' in cols: product_df.rename(columns={'Date': 'DATE'}, inplace=True)
+        if 'Sold Price' in cols: product_df.rename(columns={'Sold Price': 'AMOUNT'}, inplace=True)
+        elif 'Amount' in cols: product_df.rename(columns={'Amount': 'AMOUNT'}, inplace=True)
+        
+        # Validate Product
+        if 'Store' not in product_df.columns: return "Error: Product file missing 'Store'", 400
+        if 'DATE' not in product_df.columns: return "Error: Product file missing 'DATE'", 400
+        if 'AMOUNT' not in product_df.columns: return "Error: Product file missing 'AMOUNT'", 400
+        if 'QUANTITY' not in product_df.columns: product_df['QUANTITY'] = 1
         
         product_df['DATE'] = pd.to_datetime(product_df['DATE'], dayfirst=True, errors='coerce')
         product_df = product_df.dropna(subset=['DATE'])
-        if 'QUANTITY' not in product_df.columns:
-            product_df['QUANTITY'] = 1
-
-        mtd_df = book1_df[book1_df['DATE'].dt.month == report_date.month]
-        today_df = mtd_df[mtd_df['DATE'].dt.date == report_date.date()]
-        today_agg = today_df.groupby('Store', as_index=False).agg({'QUANTITY': 'sum', 'AMOUNT': 'sum'}).rename(columns={'QUANTITY': 'FTD Count', 'AMOUNT': 'FTD Value'})
-        mtd_agg = mtd_df.groupby('Store', as_index=False).agg({'QUANTITY': 'sum', 'AMOUNT': 'sum'}).rename(columns={'QUANTITY': 'MTD Count', 'AMOUNT': 'MTD Value'})
-
+        
+        # Aggregates for Product
         product_mtd_df = product_df[product_df['DATE'].dt.month == report_date.month]
         product_today_df = product_mtd_df[product_mtd_df['DATE'].dt.date == report_date.date()]
+        
         product_today_agg = product_today_df.groupby('Store', as_index=False).agg({'QUANTITY': 'sum', 'AMOUNT': 'sum'}).rename(columns={'QUANTITY': 'Product_FTD_Count', 'AMOUNT': 'Product_FTD_Amount'})
         product_mtd_agg = product_mtd_df.groupby('Store', as_index=False).agg({'QUANTITY': 'sum', 'AMOUNT': 'sum'}).rename(columns={'QUANTITY': 'Product_MTD_Count', 'AMOUNT': 'Product_MTD_Amount'})
+        
+        # MEMORY CLEANUP 2
+        print("Cleaning up Product memory...", file=sys.stderr)
+        # Store unique stores before deleting
+        product_stores = product_df['Store'].unique()
+        del product_df
+        del product_mtd_df
+        del product_today_df
+        gc.collect()
 
+        # Process Previous Month (Optional)
+        prev_mtd_agg = pd.DataFrame(columns=['Store', 'PREV MONTH SALE'])
         if prev_osg_file and prev_osg_file.filename != '':
-            prev_df = pd.read_excel(prev_osg_file)
-            prev_df.rename(columns={'Branch': 'Store'}, inplace=True)
+            print("Reading Prev OSG file...", file=sys.stderr)
+            prev_df = pd.read_excel(prev_osg_file, engine='openpyxl')
+            if 'Branch' in prev_df.columns: prev_df.rename(columns={'Branch': 'Store'}, inplace=True)
             prev_df['DATE'] = pd.to_datetime(prev_df['DATE'], dayfirst=True, errors='coerce')
             prev_df = prev_df.dropna(subset=['DATE'])
+            
             prev_mtd_df = prev_df[prev_df['DATE'].dt.month == prev_date.month]
             prev_mtd_agg = prev_mtd_df.groupby('Store', as_index=False).agg({'AMOUNT': 'sum'}).rename(columns={'AMOUNT': 'PREV MONTH SALE'})
-        else:
-            prev_mtd_agg = pd.DataFrame(columns=['Store', 'PREV MONTH SALE'])
+            
+            # MEMORY CLEANUP 3
+            del prev_df
+            del prev_mtd_df
+            gc.collect()
 
-        all_stores = pd.DataFrame(pd.Series(pd.concat([future_store_df['Store'], book1_df['Store'], product_df['Store']]).unique(), name='Store'))
+        # Merge Data
+        print("Merging data...", file=sys.stderr)
+        # Get all unique stores from the aggregates we have
+        all_stores_set = set(future_store_df['Store'])
+        all_stores_set.update(today_agg['Store'])
+        all_stores_set.update(product_stores)
+        
+        all_stores = pd.DataFrame({'Store': list(all_stores_set)})
+        
         report_df = all_stores.merge(today_agg, on='Store', how='left') \
                               .merge(mtd_agg, on='Store', how='left') \
                               .merge(product_today_agg, on='Store', how='left') \

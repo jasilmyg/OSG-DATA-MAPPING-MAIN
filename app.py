@@ -264,6 +264,17 @@ def process_report1():
         product_file = request.files['product_file']
         prev_osg_file = request.files.get('prev_osg_file')
         
+        # Log File Sizes
+        curr_osg_file.seek(0, 2)
+        osg_size = curr_osg_file.tell()
+        curr_osg_file.seek(0)
+        
+        product_file.seek(0, 2)
+        prod_size = product_file.tell()
+        product_file.seek(0)
+        
+        print(f"File Sizes - OSG: {osg_size/1024/1024:.2f} MB, Product: {prod_size/1024/1024:.2f} MB", file=sys.stderr)
+        
         print("Loading master files...", file=sys.stderr)
         # Load master files from backend
         try:
@@ -274,10 +285,15 @@ def process_report1():
             print(f"Error loading master files: {e}", file=sys.stderr)
             return f"ERROR loading master files: {e}", 500
         
-        print("Reading OSG file...")
+        print("Reading OSG file (using calamine)...", file=sys.stderr)
         
         # ... (Previous code for reading OSG file) ...
-        book1_df = pd.read_excel(curr_osg_file, engine='openpyxl')
+        try:
+            book1_df = pd.read_excel(curr_osg_file, engine='calamine')
+        except Exception as e:
+            print(f"Calamine failed, falling back to openpyxl: {e}", file=sys.stderr)
+            curr_osg_file.seek(0)
+            book1_df = pd.read_excel(curr_osg_file, engine='openpyxl')
         print(f"OSG file read. Shape: {book1_df.shape}", file=sys.stderr)
         
         # Normalize OSG Columns
@@ -311,8 +327,13 @@ def process_report1():
         gc.collect()
 
         # Process Product File
-        print("Reading Product file...", file=sys.stderr)
-        product_df = pd.read_excel(product_file, engine='openpyxl')
+        print("Reading Product file (using calamine)...", file=sys.stderr)
+        try:
+            product_df = pd.read_excel(product_file, engine='calamine')
+        except Exception as e:
+            print(f"Calamine failed for product, falling back to openpyxl: {e}", file=sys.stderr)
+            product_file.seek(0)
+            product_df = pd.read_excel(product_file, engine='openpyxl')
         
         # Normalize Product Columns
         cols = product_df.columns
@@ -349,8 +370,13 @@ def process_report1():
         # Process Previous Month (Optional)
         prev_mtd_agg = pd.DataFrame(columns=['Store', 'PREV MONTH SALE'])
         if prev_osg_file and prev_osg_file.filename != '':
-            print("Reading Prev OSG file...", file=sys.stderr)
-            prev_df = pd.read_excel(prev_osg_file, engine='openpyxl')
+            print("Reading Prev OSG file (using calamine)...", file=sys.stderr)
+            try:
+                prev_df = pd.read_excel(prev_osg_file, engine='calamine')
+            except Exception as e:
+                print(f"Calamine failed for prev, falling back to openpyxl: {e}", file=sys.stderr)
+                prev_osg_file.seek(0)
+                prev_df = pd.read_excel(prev_osg_file, engine='openpyxl')
             if 'Branch' in prev_df.columns: prev_df.rename(columns={'Branch': 'Store'}, inplace=True)
             prev_df['DATE'] = pd.to_datetime(prev_df['DATE'], dayfirst=True, errors='coerce')
             prev_df = prev_df.dropna(subset=['DATE'])

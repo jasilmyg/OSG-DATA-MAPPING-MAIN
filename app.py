@@ -238,16 +238,25 @@ def process_mapping():
 @app.route("/process_report1", methods=["POST"])
 def process_report1():
     try:
+        print("=== START REPORT 1 PROCESSING ===")
+        print("Reading form data...")
         report_date = pd.to_datetime(request.form['report_date'])
         prev_date = pd.to_datetime(request.form['prev_date'])
+        print(f"Report date: {report_date}, Prev date: {prev_date}")
         
+        print("Reading uploaded files...")
         curr_osg_file = request.files['curr_osg_file']
         product_file = request.files['product_file']
         prev_osg_file = request.files.get('prev_osg_file')
+        print(f"Files received - OSG: {curr_osg_file.filename}, Product: {product_file.filename}, Prev: {prev_osg_file.filename if prev_osg_file else 'None'}")
         
+        print("Loading master files...")
         # Load master files from backend
         future_store_df = pd.read_excel("myG All Store.xlsx")
         rbm_df = pd.read_excel("RBM,BDM,BRANCH.xlsx")
+        print(f"Master files loaded - Stores: {len(future_store_df)}, RBM: {len(rbm_df)}")
+        
+        print("Reading OSG file...")
         
         book1_df = pd.read_excel(curr_osg_file)
         

@@ -10,6 +10,8 @@ from openpyxl import Workbook
 from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
 from openpyxl.utils.dataframe import dataframe_to_rows
 from openpyxl.utils import get_column_letter
+import sys
+import gc
 
 app = Flask(__name__)
 
@@ -90,7 +92,7 @@ def index():
 
 @app.route("/health")
 def health():
-    return {"status": "ok", "version": "1.9", "deployed": "2025-11-29 11:40"}
+    return {"status": "ok", "version": "2.0", "deployed": "2025-11-29 12:45"}
 
 @app.route("/mapping")
 def mapping_page():
@@ -98,154 +100,20 @@ def mapping_page():
 
 @app.route("/report1")
 def report1_page():
-    today = datetime.today().strftime('%Y-%m-%d')
-    first_of_month = datetime.today().replace(day=1).strftime('%Y-%m-%d')
-    return render_template("report1.html", today=today, first_of_month=first_of_month)
+    return render_template("report1.html")
 
 @app.route("/report2")
 def report2_page():
-    today = datetime.today().strftime('%Y-%m-%d')
-    return render_template("report2.html", today=today)
+    return render_template("report2.html")
 
 # ---------------------------------------------------------
-# PROCESS: DATA MAPPING
-# ---------------------------------------------------------
-
-@app.route("/process_mapping", methods=["POST"])
-def process_mapping():
-    if 'osg_file' not in request.files or 'product_file' not in request.files:
-        return "Missing files", 400
-
-    osg_file = request.files["osg_file"]
-    product_file = request.files["product_file"]
-
-    osg_df = pd.read_excel(osg_file)
-    product_df = pd.read_excel(product_file)
-
-    # Preprocess
-    product_df['Category'] = product_df['Category'].astype(str).str.upper().replace('NAN', '')
-    product_df['Model'] = product_df['Model'].fillna('')
-    product_df['Customer Mobile'] = product_df['Customer Mobile'].astype(str)
-    product_df['Invoice Number'] = product_df['Invoice Number'].astype(str)
-    product_df['Item Rate'] = pd.to_numeric(product_df['Item Rate'], errors='coerce')
-    product_df['IMEI'] = product_df['IMEI'].astype(str).fillna('')
-    product_df['Brand'] = product_df['Brand'].fillna('')
-    osg_df['Customer Mobile'] = osg_df['Customer Mobile'].astype(str)
-
-    def get_model(row):
-        mobile = row['Customer Mobile']
-        retailer_sku = str(row.get('Retailer SKU', ''))
-        invoice = str(row.get('Invoice Number', ''))
-        user_products = product_df[product_df['Customer Mobile'] == mobile]
-
-        if user_products.empty:
-            return ''
-
-        unique_models = user_products['Model'].dropna().unique()
-        if len(unique_models) == 1:
-            return unique_models[0]
-
-        mapped_keywords = []
-        for sku_key, keywords in sku_category_mapping.items():
-            if sku_key in retailer_sku:
-                mapped_keywords = [kw.lower() for kw in keywords]
-                break
-
-        filtered = user_products[user_products['Category'].str.lower().isin(mapped_keywords)]
-
-        if not filtered.empty:
-             if filtered['Model'].nunique() == 1:
-                return filtered['Model'].iloc[0]
-
-        slab_min, slab_max = extract_price_slab(retailer_sku)
-        if slab_min and slab_max:
-            slab_filtered = filtered[(filtered['Item Rate'] >= slab_min) & (filtered['Item Rate'] <= slab_max)]
-            if not slab_filtered.empty and slab_filtered['Model'].nunique() == 1:
-                return slab_filtered['Model'].iloc[0]
-
-            invoice_filtered = slab_filtered[slab_filtered['Invoice Number'].astype(str) == invoice]
-            if not invoice_filtered.empty and invoice_filtered['Model'].nunique() == 1:
-                return invoice_filtered['Model'].iloc[0]
-        return ''
-
-    osg_df['Model'] = osg_df.apply(get_model, axis=1)
-
-    category_brand_df = product_df[['Customer Mobile', 'Model', 'Category', 'Brand']].drop_duplicates()
-    osg_df = osg_df.merge(category_brand_df, on=['Customer Mobile', 'Model'], how='left')
-
-    invoice_pool = defaultdict(list)
-    itemrate_pool = defaultdict(list)
-    imei_pool = defaultdict(list)
-
-    for _, row in product_df.iterrows():
-        key = (row['Customer Mobile'], row['Model'])
-        invoice_pool[key].append(row['Invoice Number'])
-        itemrate_pool[key].append(row['Item Rate'])
-        imei_pool[key].append(row['IMEI'])
-
-    invoice_usage_counter = defaultdict(int)
-    itemrate_usage_counter = defaultdict(int)
-    imei_usage_counter = defaultdict(int)
-
-    def assign_from_pool(row, pool, counter_dict):
-        key = (row['Customer Mobile'], row['Model'])
-        values = pool.get(key, [])
-        index = counter_dict[key]
-        if index < len(values):
-            counter_dict[key] += 1
-            return values[index]
-        return ''
-
-    osg_df['Product Invoice Number'] = osg_df.apply(lambda row: assign_from_pool(row, invoice_pool, invoice_usage_counter), axis=1)
-    osg_df['Item Rate'] = osg_df.apply(lambda row: assign_from_pool(row, itemrate_pool, itemrate_usage_counter), axis=1)
-    osg_df['IMEI'] = osg_df.apply(lambda row: assign_from_pool(row, imei_pool, imei_usage_counter), axis=1)
-
-    osg_df['Store Code'] = osg_df['Product Invoice Number'].astype(str).apply(
-        lambda x: re.search(r'\b([A-Z]{2,})\b', x).group(1) if re.search(r'\b([A-Z]{2,})\b', x) else ''
-    )
-
-    osg_df[['Manufacturer Warranty', 'Duration (Year)']] = osg_df['Retailer SKU'].apply(
-        lambda sku: pd.Series(extract_warranty_duration(sku))
-    )
-
-    final_columns = [
-        'Customer Mobile', 'Date', 'Invoice Number','Product Invoice Number', 'Customer Name', 'Store Code', 'Branch', 'Region',
-        'IMEI', 'Category', 'Brand', 'Quantity', 'Item Code', 'Model', 'Plan Type', 'EWS QTY', 'Item Rate',
-        'Plan Price', 'Sold Price', 'Email', 'Product Count', 'Manufacturer Warranty', 'Retailer SKU', 'OnsiteGo SKU',
-        'Duration (Year)', 'Total Coverage', 'Comment', 'Return Flag', 'Return against invoice No.',
-        'Primary Invoice No.'
-    ]
-
-    for col in final_columns:
-        if col not in osg_df.columns:
-            osg_df[col] = ''
-
-    osg_df['Quantity'] = 1
-    osg_df['EWS QTY'] = 1
-    osg_df = osg_df[final_columns]
-
-    output = BytesIO()
-    styled = osg_df.style.apply(highlight_row, axis=1)
-    styled.to_excel(output, index=False, engine='openpyxl')
-    output.seek(0)
-
-    return send_file(
-        output,
-        as_attachment=True,
-        download_name="OSG_Updated_Output.xlsx",
-        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    )
-
-# ---------------------------------------------------------
-# PROCESS: REPORT 1 (SALES REPORT)
+# PROCESS: REPORT 1 (SALES REPORT) - FULL STREAMLIT LOGIC
 # ---------------------------------------------------------
 
 @app.route("/process_report1", methods=["POST"])
 def process_report1():
-    import sys
-    import gc
     try:
-        print("=== START REPORT 1 PROCESSING (v1.9 - Restored) ===", file=sys.stderr)
+        print("=== START REPORT 1 PROCESSING (v2.0 - Full Streamlit Logic) ===", file=sys.stderr)
         
         # Check for xlsxwriter
         try:
@@ -618,6 +486,21 @@ def process_report1():
                 
                 overall_asp = round(rbm_data['MTD Value'].sum() / rbm_data['MTD Count'].sum(), 2) if rbm_data['MTD Count'].sum() != 0 else 0
                 rbm_ws.write(total_row, 9, overall_asp, formats['asp_total'])
+
+                # Insights Section (Streamlit Logic)
+                insights_row = total_row + 2
+                if growth > 15:
+                    rbm_ws.merge_range(insights_row, 0, insights_row, len(rbm_headers) - 1, f"📈 Excellent Growth: {growth}% increase from previous month", formats['rbm_summary'])
+                elif growth < 0:
+                    rbm_ws.merge_range(insights_row, 0, insights_row, len(rbm_headers) - 1, f"📉 Needs Attention: {abs(growth)}% decrease from previous month", formats['rbm_summary'])
+                else:
+                    rbm_ws.merge_range(insights_row, 0, insights_row, len(rbm_headers) - 1, f"📊 Stable Performance: Less change from previous month", formats['rbm_summary'])
+
+                insights_row += 1
+                top_3_stores = rbm_data.head(3)
+                if len(top_3_stores) > 0:
+                    top_stores_text = " | ".join([f"{store['Store Name']}: ₹{int(store['MTD Value']):,}" for _, store in top_3_stores.iterrows()])
+                    rbm_ws.merge_range(insights_row, 0, insights_row, len(rbm_headers) - 1, f"🏆 Top 3 Performers: {top_stores_text}", formats['rbm_summary'])
 
         excel_output.seek(0)
         return send_file(excel_output, as_attachment=True, download_name=f"OSG_Sales_Report_{datetime.now().strftime('%Y%m%d')}.xlsx", mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")

@@ -3,47 +3,46 @@
 {% block title %}Day View Report - OSG Dashboard{% endblock %}
 
 {% block content %}
-<div class="page-header">
+<div class="page-header fade-in">
     <h1 class="page-title">Day View Report</h1>
-    <p class="page-subtitle">Generate daily store summary reports</p>
+    <p class="page-subtitle">Generate daily store performance summaries</p>
 </div>
 
-<div class="card" style="max-width: 800px; margin: 0 auto;">
+<div class="card fade-in" style="animation-delay: 0.2s; max-width: 800px; margin: 0 auto;">
     <form action="/process_report2" method="post" enctype="multipart/form-data">
-        <div class="grid">
+
+        <div class="grid" style="grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 2rem;">
             <div class="form-group">
                 <label class="form-label">Report Date</label>
-                <input type="date" name="report_date" class="form-control" required value="{{ today }}">
+                <input type="date" name="report_date" class="form-control" required>
             </div>
-
             <div class="form-group">
                 <label class="form-label">Time Slot</label>
-                <select name="time_slot" class="form-control">
-                    <option value="12:30PM">12:30 PM</option>
-                    <option value="1PM">1:00 PM</option>
-                    <option value="4PM">4:00 PM</option>
-                    <option value="6PM">6:00 PM</option>
+                <select name="time_slot" class="form-control" required>
+                    <option value="" disabled selected>Select Time Slot</option>
+                    <option value="11:30 AM">11:30 AM</option>
+                    <option value="02:30 PM">02:30 PM</option>
+                    <option value="05:30 PM">05:30 PM</option>
+                    <option value="08:30 PM">08:30 PM</option>
+                    <option value="Closing">Closing</option>
                 </select>
             </div>
         </div>
 
-        <div class="alert alert-info" style="margin-bottom: 1.5rem;">
-            <small><i class="fas fa-check-circle"></i> Future Store List is loaded automatically from the
-                server.</small>
-        </div>
-
-        <div class="form-group">
-            <label class="form-label">Daily Sales Report</label>
+        <div class="form-group" style="margin-bottom: 2.5rem;">
+            <label class="form-label">Daily Sales File</label>
             <div class="file-upload">
-                <i class="fas fa-file-excel file-icon"></i>
-                <div class="file-msg">Upload Daily Sales Report</div>
-                <div class="file-name"></div>
-                <input type="file" name="sales_file" required accept=".xlsx">
+                <input type="file" name="sales_file" accept=".xlsx" required>
+                <i class="fas fa-file-invoice-dollar file-icon"></i>
+                <div class="file-name">Click or Drag to Upload</div>
+                <div class="file-msg" style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0.25rem;">Upload
+                    the daily sales dump (xlsx)</div>
             </div>
         </div>
 
-        <button type="submit" class="btn btn-primary btn-block" style="background: var(--accent);">
-            <i class="fas fa-bolt"></i> Generate View
+        <button type="submit" class="btn btn-primary btn-block"
+            style="background: linear-gradient(135deg, var(--accent), #a78bfa); font-size: 1.1rem; padding: 1.25rem;">
+            <i class="fas fa-bolt"></i> Generate Day View
         </button>
     </form>
 </div>

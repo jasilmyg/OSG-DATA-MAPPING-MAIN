@@ -3,75 +3,75 @@
 {% block title %}Sales Report - OSG Dashboard{% endblock %}
 
 {% block content %}
-<div class="page-header">
-    <h1 class="page-title">OSG Sales Report</h1>
-    <p class="page-subtitle">Generate comprehensive sales performance reports</p>
+<div class="page-header fade-in">
+    <h1 class="page-title">Sales Report Generator</h1>
+    <p class="page-subtitle">Generate comprehensive sales reports with conversion analysis</p>
 </div>
 
-<form action="/process_report1" method="post" enctype="multipart/form-data">
-    <div class="grid">
-        <!-- Date Selection -->
-        <div class="card">
-            <h3 style="margin-bottom: 1.5rem; color: var(--primary);"><i class="fas fa-calendar-alt"></i> Date Selection
-            </h3>
+<div class="card fade-in" style="animation-delay: 0.2s; max-width: 1000px; margin: 0 auto;">
+    <form action="/process_report1" method="post" enctype="multipart/form-data">
+
+        <div
+            style="background: rgba(99, 102, 241, 0.1); border: 1px solid rgba(99, 102, 241, 0.2); border-radius: 1rem; padding: 1.5rem; margin-bottom: 2rem;">
+            <h3 style="color: #fff; margin-bottom: 0.5rem; font-size: 1.1rem;"><i class="fas fa-info-circle"
+                    style="color: var(--primary);"></i> Instructions</h3>
+            <ul style="color: var(--text-muted); font-size: 0.95rem; padding-left: 1.5rem; margin: 0;">
+                <li style="margin-bottom: 0.25rem;">Upload <strong>Current Month OSG Sales Data</strong> (xlsx)</li>
+                <li style="margin-bottom: 0.25rem;">Upload <strong>Previous Month OSG Sales Data</strong> (xlsx)</li>
+                <li style="margin-bottom: 0.25rem;">Upload <strong>Current Month Product Sales Data</strong> (xlsx)</li>
+                <li>Master files (Store List, RBM List) are loaded automatically.</li>
+            </ul>
+        </div>
+
+        <div class="grid" style="grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 2rem;">
             <div class="form-group">
                 <label class="form-label">Current Report Date</label>
-                <input type="date" name="report_date" class="form-control" required value="{{ today }}">
+                <input type="date" name="report_date" class="form-control" required>
             </div>
             <div class="form-group">
                 <label class="form-label">Previous Report Date (Comparison)</label>
-                <input type="date" name="prev_date" class="form-control" required value="{{ first_of_month }}">
+                <input type="date" name="prev_date" class="form-control" required>
             </div>
         </div>
 
-        <!-- Master Files Info -->
-        <div class="card">
-            <h3 style="margin-bottom: 1.5rem; color: var(--accent);"><i class="fas fa-database"></i> Master Files</h3>
-            <div class="alert alert-info">
-                <small><i class="fas fa-check-circle"></i> Master files (Store List, RBM List) are loaded automatically
-                    from the server.</small>
-            </div>
-        </div>
-    </div>
-
-    <div class="card" style="margin-top: 2rem;">
-        <h3 style="margin-bottom: 1.5rem; color: var(--secondary);"><i class="fas fa-file-upload"></i> Sales Data</h3>
-
-        <div class="grid">
+        <div class="grid" style="gap: 1.5rem; margin-bottom: 2rem;">
             <div class="form-group">
-                <label class="form-label">Current Month OSG Sales</label>
+                <label class="form-label">Current Month OSG Sales Data</label>
                 <div class="file-upload">
-                    <i class="fas fa-file-invoice-dollar file-icon"></i>
-                    <div class="file-msg">Upload Current OSG Data</div>
-                    <div class="file-name"></div>
-                    <input type="file" name="curr_osg_file" required accept=".xlsx">
+                    <input type="file" name="curr_osg_file" accept=".xlsx" required>
+                    <i class="fas fa-file-excel file-icon"></i>
+                    <div class="file-name">Click or Drag to Upload</div>
+                    <div class="file-msg" style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0.25rem;">
+                        Supported format: .xlsx</div>
                 </div>
             </div>
 
             <div class="form-group">
-                <label class="form-label">Previous Month OSG Sales</label>
+                <label class="form-label">Previous Month OSG Sales Data</label>
                 <div class="file-upload">
-                    <i class="fas fa-history file-icon"></i>
-                    <div class="file-msg">Upload Previous OSG Data</div>
-                    <div class="file-name"></div>
                     <input type="file" name="prev_osg_file" accept=".xlsx">
+                    <i class="fas fa-history file-icon"></i>
+                    <div class="file-name">Click or Drag to Upload</div>
+                    <div class="file-msg" style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0.25rem;">
+                        Optional (for growth comparison)</div>
                 </div>
             </div>
 
             <div class="form-group">
-                <label class="form-label">Current Product Sales</label>
+                <label class="form-label">Current Month Product Sales Data</label>
                 <div class="file-upload">
+                    <input type="file" name="product_file" accept=".xlsx" required>
                     <i class="fas fa-tags file-icon"></i>
-                    <div class="file-msg">Upload Product Sales Data</div>
-                    <div class="file-name"></div>
-                    <input type="file" name="product_file" required accept=".xlsx">
+                    <div class="file-name">Click or Drag to Upload</div>
+                    <div class="file-msg" style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0.25rem;">
+                        Required for conversion rates</div>
                 </div>
             </div>
         </div>
 
-        <button type="submit" class="btn btn-primary btn-block" style="margin-top: 2rem; background: var(--secondary);">
-            <i class="fas fa-magic"></i> Generate Report
+        <button type="submit" class="btn btn-primary btn-block" style="font-size: 1.1rem; padding: 1.25rem;">
+            <i class="fas fa-wand-magic-sparkles"></i> Generate Report
         </button>
-    </div>
-</form>
+    </form>
+</div>
 {% endblock %}

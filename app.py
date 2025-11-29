@@ -92,7 +92,7 @@ def index():
 
 @app.route("/health")
 def health():
-    return {"status": "ok", "version": "2.0", "deployed": "2025-11-29 12:45"}
+    return {"status": "ok", "version": "2.1", "deployed": "2025-11-29 13:25"}
 
 @app.route("/mapping")
 def mapping_page():
@@ -363,10 +363,21 @@ def process_report1():
             worksheet.merge_range(3, 0, 3, 1, "📊 SUMMARY", formats['header_secondary'])
             worksheet.merge_range(3, 2, 3, len(headers) - 1, f"Total: {total_stores} | Active: {active_stores} | Inactive: {inactive_stores}", formats['data_normal'])
 
+            # Dynamically adjust column widths with error handling
+            column_widths = {}
+            for i in range(len(headers)):
+                try:
+                    if i == 0:
+                        max_len = max(all_data[headers[i]].astype(str).map(len).max(), len(headers[i])) + 2
+                    else:
+                        max_len = max(all_data[headers[i]].map(lambda x: len(str(x))).max() if headers[i] in all_data.columns else 0, len(headers[i])) + 2
+                    column_widths[i] = max(max_len, 10)
+                except KeyError:
+                    column_widths[i] = len(headers[i]) + 2
+                worksheet.set_column(i, i, column_widths[i])
+
             for col, header in enumerate(headers):
                 worksheet.write(5, col, header, formats['header_main'])
-                worksheet.set_column(col, col, 15)
-            worksheet.set_column(0, 0, 30)
 
             for row_idx, (_, row) in enumerate(all_data.iterrows(), start=6):
                 is_alt = (row_idx - 6) % 2 == 1
@@ -437,10 +448,21 @@ def process_report1():
                     best_performer = rbm_data.iloc[0]
                     rbm_ws.merge_range(4, 0, 4, len(rbm_headers) - 1, f"🥇 Best Performer: {best_performer['Store Name']} - ₹{int(best_performer['MTD Value']):,}", formats['rbm_performance'])
 
+                # Dynamically adjust column widths for RBM sheets
+                rbm_column_widths = {}
+                for i in range(len(rbm_headers)):
+                    try:
+                        if i == 0:
+                            max_len = max(rbm_data[rbm_headers[i]].astype(str).map(len).max(), len(rbm_headers[i])) + 2
+                        else:
+                            max_len = max(rbm_data[rbm_headers[i]].map(lambda x: len(str(x))).max() if rbm_headers[i] in rbm_data.columns else 0, len(rbm_headers[i])) + 2
+                        rbm_column_widths[i] = max(max_len, 10)
+                    except KeyError:
+                        rbm_column_widths[i] = len(rbm_headers[i]) + 2
+                    rbm_ws.set_column(i, i, rbm_column_widths[i])
+
                 for col, header in enumerate(rbm_headers):
                     rbm_ws.write(6, col, header, formats['rbm_header'])
-                    rbm_ws.set_column(col, col, 15)
-                rbm_ws.set_column(0, 0, 30)
 
                 for row_idx, (_, row) in enumerate(rbm_data.iterrows(), start=7):
                     is_alt = (row_idx - 7) % 2 == 1

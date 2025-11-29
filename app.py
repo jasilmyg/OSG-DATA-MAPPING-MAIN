@@ -90,7 +90,7 @@ def index():
 
 @app.route("/health")
 def health():
-    return {"status": "ok", "version": "1.5", "deployed": "2025-11-28 15:25"}
+    return {"status": "ok", "version": "1.9", "deployed": "2025-11-29 11:40"}
 
 @app.route("/mapping")
 def mapping_page():

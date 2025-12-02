@@ -176,9 +176,25 @@ def process_report1():
             # RBM column
             elif col_lower in ['rbm', 'manager']:
                 column_renames[col] = 'RBM'
-            # Branch/Store column
-            elif col_lower in ['branch', 'store']:
-                column_renames[col] = 'Store'
+        
+        # Explicitly handle Store/Branch selection to avoid conflicts
+        store_col_found = False
+        # Priority list for Store column
+        priority_store_cols = ['store', 'store name', 'branch', 'branch name', 'outlet', 'outlet name']
+        
+        # First, check if we already mapped something to 'Store' (unlikely with new logic, but good safety)
+        if 'Store' in column_renames.values():
+            store_col_found = True
+        else:
+            # Search through original columns to find the best match
+            for priority_name in priority_store_cols:
+                for col in book1_df.columns:
+                    if str(col).strip().lower() == priority_name:
+                        column_renames[col] = 'Store'
+                        store_col_found = True
+                        break
+                if store_col_found:
+                    break
         
         if column_renames:
             book1_df.rename(columns=column_renames, inplace=True)

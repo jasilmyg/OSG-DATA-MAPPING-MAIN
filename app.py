@@ -239,7 +239,8 @@ def process_report1():
                               .merge(product_today_agg, on='Store', how='left') \
                               .merge(product_mtd_agg, on='Store', how='left') \
                               .merge(prev_mtd_agg, on='Store', how='left') \
-                              .merge(rbm_df[['Store', 'RBM']], on='Store', how='left')
+                              .merge(rbm_df.rename(columns={'Branch': 'Store'})[['Store', 'RBM']], on='Store', how='left')
+
 
         # Fill NaNs
         required_columns = ['Store', 'FTD Count', 'FTD Value', 'Product_FTD_Amount', 'MTD Count', 'MTD Value', 'Product_MTD_Amount', 'PREV MONTH SALE', 'RBM']

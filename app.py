@@ -92,7 +92,7 @@ def index():
 
 @app.route("/health")
 def health():
-    return {"status": "ok", "version": "2.1", "deployed": "2025-11-29 13:25"}
+    return {"status": "ok", "version": "3.1", "deployed": "2025-12-02 14:10"}
 
 @app.route("/mapping")
 def mapping_page():
@@ -107,13 +107,13 @@ def report2_page():
     return render_template("report2.html")
 
 # ---------------------------------------------------------
-# PROCESS: REPORT 1 (SALES REPORT) - FULL STREAMLIT LOGIC
+# PROCESS: REPORT 1 (SALES REPORT) - REFACTORED FOR FILES WITH RBM
 # ---------------------------------------------------------
 
 @app.route("/process_report1", methods=["POST"])
 def process_report1():
     try:
-        print("=== START REPORT 1 PROCESSING (v2.0 - Full Streamlit Logic) ===", file=sys.stderr)
+        print("=== START REPORT 1 PROCESSING (v3.1 - Files with RBM columns) ===", file=sys.stderr)
         
         # Check for xlsxwriter
         try:
@@ -143,202 +143,310 @@ def process_report1():
         
         print(f"File Sizes - OSG: {osg_size/1024/1024:.2f} MB, Product: {prod_size/1024/1024:.2f} MB", file=sys.stderr)
         
-        print("Loading master files...", file=sys.stderr)
-        # Load master files from backend
-        try:
-            future_store_df = pd.read_excel("myG All Store.xlsx", engine='openpyxl')
-            rbm_df = pd.read_excel("RBM,BDM,BRANCH.xlsx", engine='openpyxl')
-            print(f"Master files loaded - Stores: {len(future_store_df)}, RBM: {len(rbm_df)}", file=sys.stderr)
-        except Exception as e:
-            print(f"Error loading master files: {e}", file=sys.stderr)
-            return f"ERROR loading master files: {e}", 500
-        
-        print("Reading OSG file...", file=sys.stderr)
+        # =========================================================================
+        # READ OSG FILE (Expected columns: DATE, QUANTITY, BILLED (QTY), AMOUNT, RBM, Branch)
+        # =========================================================================
+        print("\n==== Reading OSG File ====", file=sys.stderr)
         try:
             book1_df = pd.read_excel(curr_osg_file, engine='openpyxl')
+            print(f"OSG file loaded. Shape: {book1_df.shape}", file=sys.stderr)
+            print(f"Original columns: {book1_df.columns.tolist()}", file=sys.stderr)
         except Exception as e:
             print(f"Error reading OSG file: {e}", file=sys.stderr)
             return f"Error reading OSG file: {e}", 500
-        print(f"OSG file read. Shape: {book1_df.shape}", file=sys.stderr)
         
-        # Normalize OSG Columns
-        cols = book1_df.columns
-        if 'Branch' in cols: book1_df.rename(columns={'Branch': 'Store'}, inplace=True)
-        if 'Date' in cols: book1_df.rename(columns={'Date': 'DATE'}, inplace=True)
-        if 'Quantity' in cols: book1_df.rename(columns={'Quantity': 'QUANTITY'}, inplace=True)
-        if 'Amount' in cols: book1_df.rename(columns={'Amount': 'AMOUNT'}, inplace=True)
+        # Normalize OSG column names (flexible to handle variations)
+        column_renames = {}
+        for col in book1_df.columns:
+            col_str = str(col).strip()
+            col_lower = col_str.lower()
+            
+            # Date column
+            if col_lower in ['date']:
+                column_renames[col] = 'DATE'
+            # Quantity column
+            elif col_lower in ['quantity', 'qty'] and 'billed' not in col_lower:
+                column_renames[col] = 'QUANTITY'
+            # Billed column
+            elif 'billed' in col_lower:
+                column_renames[col] = 'BILLED_QTY'
+            # Amount column
+            elif col_lower in ['amount']:
+                column_renames[col] = 'AMOUNT'
+            # RBM column
+            elif col_lower in ['rbm', 'manager']:
+                column_renames[col] = 'RBM'
+            # Branch/Store column
+            elif col_lower in ['branch', 'store']:
+                column_renames[col] = 'Store'
         
-        # Validate OSG
-        if 'Store' not in book1_df.columns: return "Error: OSG file missing 'Branch' or 'Store'", 400
-        if 'DATE' not in book1_df.columns: return "Error: OSG file missing 'DATE'", 400
-        if 'AMOUNT' not in book1_df.columns: return "Error: OSG file missing 'AMOUNT'", 400
-        if 'QUANTITY' not in book1_df.columns: book1_df['QUANTITY'] = 1
+        if column_renames:
+            book1_df.rename(columns=column_renames, inplace=True)
+            print(f"Column mappings applied: {column_renames}", file=sys.stderr)
         
+        print(f"Columns after normalization: {book1_df.columns.tolist()}", file=sys.stderr)
+        
+        # Validate required columns
+        if 'Store' not in book1_df.columns:
+            return f"Error: OSG file missing 'Store' or 'Branch' column. Found columns: {book1_df.columns.tolist()}", 400
+        if 'DATE' not in book1_df.columns:
+            return f"Error: OSG file missing 'DATE' column. Found columns: {book1_df.columns.tolist()}", 400
+        if 'AMOUNT' not in book1_df.columns:
+            return f"Error: OSG file missing 'AMOUNT' column. Found columns: {book1_df.columns.tolist()}", 400
+        
+        # Handle QUANTITY - use BILLED_QTY if QUANTITY not found
+        if 'QUANTITY' not in book1_df.columns:
+            if 'BILLED_QTY' in book1_df.columns:
+                book1_df['QUANTITY'] = book1_df['BILLED_QTY']
+                print("Using BILLED_QTY as QUANTITY", file=sys.stderr)
+            else:
+                book1_df['QUANTITY'] = 1
+                print("No quantity column found, defaulting to 1", file=sys.stderr)
+        
+        # Parse dates and clean data
         book1_df['DATE'] = pd.to_datetime(book1_df['DATE'], dayfirst=True, errors='coerce')
         book1_df = book1_df.dropna(subset=['DATE'])
+        book1_df['Store'] = book1_df['Store'].astype(str).str.strip()
+        book1_df = book1_df[book1_df['Store'] != 'nan']
+        
+        # Handle RBM column from uploaded file
+        has_rbm = 'RBM' in book1_df.columns
+        print(f"RBM column in OSG file: {has_rbm}", file=sys.stderr)
+        
+        if has_rbm:
+            book1_df['RBM'] = book1_df['RBM'].astype(str).str.strip()
+            book1_df = book1_df[book1_df['RBM'] != 'nan']
+            rbm_stores = book1_df[['Store', 'RBM']].drop_duplicates(subset=['Store']).copy()
+            print(f"Extracted RBM mapping from OSG: {len(rbm_stores)} store-RBM pairs", file=sys.stderr)
+            print(f"Unique RBMs: {book1_df['RBM'].unique()[:10].tolist()}", file=sys.stderr)
+        
+        print(f"OSG data cleaned. Final shape: {book1_df.shape}", file=sys.stderr)
+        print(f"Date range: {book1_df['DATE'].min()} to {book1_df['DATE'].max()}", file=sys.stderr)
+        print(f"Unique stores: {book1_df['Store'].nunique()}", file=sys.stderr)
         
         # =========================================================================
-        # COMPREHENSIVE RBM COLUMN NORMALIZATION
+        # CALCULATE OSG AGGREGATIONS
         # =========================================================================
-        print(f"\n==== RBM DataFrame Column Normalization ====", file=sys.stderr)
-        print(f"Original columns: {list(rbm_df.columns)}", file=sys.stderr)
-        print(f"DataFrame shape: {rbm_df.shape}", file=sys.stderr)
+        print("\n==== Calculating OSG Aggregations ====", file=sys.stderr)
         
-        # Create a column mapping dictionary for case-insensitive matching
-        column_mapping = {}
-        
-        # Find Store/Branch column (case-insensitive)
-        store_col_found = False
-        for col in rbm_df.columns:
-            col_lower = str(col).lower().strip()
-            if col_lower in ['store', 'branch', 'store name', 'branch name', 'storename', 'branchname']:
-                if col != 'Store':  # Only rename if not already 'Store'
-                    column_mapping[col] = 'Store'
-                    print(f"  Mapping '{col}' -> 'Store'", file=sys.stderr)
-                else:
-                    print(f"  Column 'Store' already exists", file=sys.stderr)
-                store_col_found = True
-                break
-        
-        # Find RBM column (case-insensitive)
-        rbm_col_found = False
-        for col in rbm_df.columns:
-            col_lower = str(col).lower().strip()
-            if col_lower in ['rbm', 'rbm name', 'rbmname', 'manager', 'regional manager', 'rm']:
-                if col != 'RBM':  # Only rename if not already 'RBM'
-                    column_mapping[col] = 'RBM'
-                    print(f"  Mapping '{col}' -> 'RBM'", file=sys.stderr)
-                else:
-                    print(f"  Column 'RBM' already exists", file=sys.stderr)
-                rbm_col_found = True
-                break
-        
-        # Apply the column mappings
-        if column_mapping:
-            rbm_df.rename(columns=column_mapping, inplace=True)
-            print(f"Applied column mappings: {column_mapping}", file=sys.stderr)
-            print(f"Columns after mapping: {list(rbm_df.columns)}", file=sys.stderr)
-        
-        # Validate required columns exist
-        if not store_col_found or 'Store' not in rbm_df.columns:
-            error_msg = f"ERROR: RBM file missing 'Store' or 'Branch' column.\nAvailable columns: {list(rbm_df.columns)}\nPlease ensure the Excel file has a column named 'Store', 'Branch', or similar."
-            print(error_msg, file=sys.stderr)
-            return error_msg, 400
-            
-        if not rbm_col_found or 'RBM' not in rbm_df.columns:
-            error_msg = f"ERROR: RBM file missing 'RBM' column.\nAvailable columns: {list(rbm_df.columns)}\nPlease ensure the Excel file has a column named 'RBM', 'Manager', or similar."
-            print(error_msg, file=sys.stderr)
-            return error_msg, 400
-        
-        # Clean up the data - keep only what we need
-        rbm_df = rbm_df[['Store', 'RBM']].copy()
-        rbm_df['Store'] = rbm_df['Store'].astype(str).str.strip()  # Remove whitespace
-        rbm_df['RBM'] = rbm_df['RBM'].astype(str).str.strip()
-        rbm_df = rbm_df[rbm_df['Store'] != 'nan']  # Remove rows with NaN store names
-        rbm_df = rbm_df[rbm_df['RBM'] != 'nan']  # Remove rows with NaN RBM names
-        
-        print(f"Final RBM DataFrame: {len(rbm_df)} rows with columns: {list(rbm_df.columns)}", file=sys.stderr)
-        print(f"Sample data:\n{rbm_df.head(3).to_string()}", file=sys.stderr)
-        print(f"==== End RBM Normalization ====\n", file=sys.stderr)
-        
-        # Aggregates for OSG
         mtd_df = book1_df[book1_df['DATE'].dt.month == report_date.month]
         today_df = mtd_df[mtd_df['DATE'].dt.date == report_date.date()]
         
-        today_agg = today_df.groupby('Store', as_index=False).agg({'QUANTITY': 'sum', 'AMOUNT': 'sum'}).rename(columns={'QUANTITY': 'FTD Count', 'AMOUNT': 'FTD Value'})
-        mtd_agg = mtd_df.groupby('Store', as_index=False).agg({'QUANTITY': 'sum', 'AMOUNT': 'sum'}).rename(columns={'QUANTITY': 'MTD Count', 'AMOUNT': 'MTD Value'})
+        print(f"MTD records: {len(mtd_df)}, Today records: {len(today_df)}", file=sys.stderr)
+        
+        today_agg = today_df.groupby('Store', as_index=False).agg({
+            'QUANTITY': 'sum',
+            'AMOUNT': 'sum'
+        }).rename(columns={'QUANTITY': 'FTD Count', 'AMOUNT': 'FTD Value'})
+        
+        mtd_agg = mtd_df.groupby('Store', as_index=False).agg({
+            'QUANTITY': 'sum',
+            'AMOUNT': 'sum'
+        }).rename(columns={'QUANTITY': 'MTD Count', 'AMOUNT': 'MTD Value'})
+        
+        print(f"Today aggregation: {len(today_agg)} stores", file=sys.stderr)
+        print(f"MTD aggregation: {len(mtd_agg)} stores", file=sys.stderr)
         
         # MEMORY CLEANUP 1
         print("Cleaning up OSG memory...", file=sys.stderr)
-        del book1_df
-        del mtd_df
-        del today_df
+        all_osg_stores = set(book1_df['Store'].unique())
+        del book1_df, mtd_df, today_df
         gc.collect()
 
-        # Process Product File
-        print("Reading Product file...", file=sys.stderr)
+        # =========================================================================
+        # READ PRODUCT FILE
+        # =========================================================================
+        print("\n==== Reading Product File ====", file=sys.stderr)
         try:
             product_df = pd.read_excel(product_file, engine='openpyxl')
+            print(f"Product file loaded. Shape: {product_df.shape}", file=sys.stderr)
+            print(f"Original columns: {product_df.columns.tolist()}", file=sys.stderr)
         except Exception as e:
             print(f"Error reading Product file: {e}", file=sys.stderr)
             return f"Error reading Product file: {e}", 500
         
-        # Normalize Product Columns
-        cols = product_df.columns
-        if 'Branch' in cols: product_df.rename(columns={'Branch': 'Store'}, inplace=True)
-        if 'Date' in cols: product_df.rename(columns={'Date': 'DATE'}, inplace=True)
-        if 'Sold Price' in cols: product_df.rename(columns={'Sold Price': 'AMOUNT'}, inplace=True)
-        elif 'Amount' in cols: product_df.rename(columns={'Amount': 'AMOUNT'}, inplace=True)
+        # Normalize Product column names
+        product_renames = {}
+        for col in product_df.columns:
+            col_lower = str(col).lower().strip()
+            if col_lower in ['date']:
+                product_renames[col] = 'DATE'
+            elif col_lower in ['quantity', 'qty']:
+                product_renames[col] = 'QUANTITY'
+            elif col_lower in ['amount', 'sold price', 'price']:
+                product_renames[col] = 'AMOUNT'
+            elif col_lower in ['branch', 'store']:
+                product_renames[col] = 'Store'
         
-        # Validate Product
-        if 'Store' not in product_df.columns: return "Error: Product file missing 'Store'", 400
-        if 'DATE' not in product_df.columns: return "Error: Product file missing 'DATE'", 400
-        if 'AMOUNT' not in product_df.columns: return "Error: Product file missing 'AMOUNT'", 400
-        if 'QUANTITY' not in product_df.columns: product_df['QUANTITY'] = 1
+        if product_renames:
+            product_df.rename(columns=product_renames, inplace=True)
+            print(f"Product column mappings: {product_renames}", file=sys.stderr)
         
+        # Validate Product file
+        if 'Store' not in product_df.columns:
+            return f"Error: Product file missing 'Store' column. Found: {product_df.columns.tolist()}", 400
+        if 'DATE' not in product_df.columns:
+            return f"Error: Product file missing 'DATE' column. Found: {product_df.columns.tolist()}", 400
+        if 'AMOUNT' not in product_df.columns:
+            return f"Error: Product file missing 'AMOUNT' column. Found: {product_df.columns.tolist()}", 400
+        
+        if 'QUANTITY' not in product_df.columns:
+            product_df['QUANTITY'] = 1
+        
+        # Parse dates and clean
         product_df['DATE'] = pd.to_datetime(product_df['DATE'], dayfirst=True, errors='coerce')
         product_df = product_df.dropna(subset=['DATE'])
+        product_df['Store'] = product_df['Store'].astype(str).str.strip()
+        product_df = product_df[product_df['Store'] != 'nan']
         
-        # Aggregates for Product
+        # =========================================================================
+        # CALCULATE PRODUCT AGGREGATIONS
+        # =========================================================================
+        print("Calculating Product aggregations...", file=sys.stderr)
+        
         product_mtd_df = product_df[product_df['DATE'].dt.month == report_date.month]
         product_today_df = product_mtd_df[product_mtd_df['DATE'].dt.date == report_date.date()]
         
-        product_today_agg = product_today_df.groupby('Store', as_index=False).agg({'QUANTITY': 'sum', 'AMOUNT': 'sum'}).rename(columns={'QUANTITY': 'Product_FTD_Count', 'AMOUNT': 'Product_FTD_Amount'})
-        product_mtd_agg = product_mtd_df.groupby('Store', as_index=False).agg({'QUANTITY': 'sum', 'AMOUNT': 'sum'}).rename(columns={'QUANTITY': 'Product_MTD_Count', 'AMOUNT': 'Product_MTD_Amount'})
+        product_today_agg = product_today_df.groupby('Store', as_index=False).agg({
+            'QUANTITY': 'sum',
+            'AMOUNT': 'sum'
+        }).rename(columns={'QUANTITY': 'Product_FTD_Count', 'AMOUNT': 'Product_FTD_Amount'})
+        
+        product_mtd_agg = product_mtd_df.groupby('Store', as_index=False).agg({
+            'QUANTITY': 'sum',
+            'AMOUNT': 'sum'
+        }).rename(columns={'QUANTITY': 'Product_MTD_Count', 'AMOUNT': 'Product_MTD_Amount'})
+        
+        print(f"Product MTD: {len(product_mtd_agg)} stores, Today: {len(product_today_agg)} stores", file=sys.stderr)
         
         # MEMORY CLEANUP 2
         print("Cleaning up Product memory...", file=sys.stderr)
-        product_stores = product_df['Store'].unique()
-        del product_df
-        del product_mtd_df
-        del product_today_df
+        product_stores = set(product_df['Store'].unique())
+        del product_df, product_mtd_df, product_today_df
         gc.collect()
 
-        # Process Previous Month (Optional)
+        # =========================================================================
+        # READ PREVIOUS MONTH FILE (OPTIONAL)
+        # =========================================================================
         prev_mtd_agg = pd.DataFrame(columns=['Store', 'PREV MONTH SALE'])
         if prev_osg_file and prev_osg_file.filename != '':
-            print("Reading Prev OSG file...", file=sys.stderr)
+            print("\n==== Reading Previous Month OSG File ====", file=sys.stderr)
             try:
                 prev_df = pd.read_excel(prev_osg_file, engine='openpyxl')
+                
+                # Normalize columns
+                prev_renames = {}
+                for col in prev_df.columns:
+                    col_lower = str(col).lower().strip()
+                    if col_lower in ['date']:
+                        prev_renames[col] = 'DATE'
+                    elif col_lower in ['amount']:
+                        prev_renames[col] = 'AMOUNT'
+                    elif col_lower in ['branch', 'store']:
+                        prev_renames[col] = 'Store'
+                
+                if prev_renames:
+                    prev_df.rename(columns=prev_renames, inplace=True)
+                
+                prev_df['DATE'] = pd.to_datetime(prev_df['DATE'], dayfirst=True, errors='coerce')
+                prev_df = prev_df.dropna(subset=['DATE'])
+                prev_df['Store'] = prev_df['Store'].astype(str).str.strip()
+                
+                prev_mtd_df = prev_df[prev_df['DATE'].dt.month == prev_date.month]
+                prev_mtd_agg = prev_mtd_df.groupby('Store', as_index=False).agg({
+                    'AMOUNT': 'sum'
+                }).rename(columns={'AMOUNT': 'PREV MONTH SALE'})
+                
+                print(f"Previous month: {len(prev_mtd_agg)} stores", file=sys.stderr)
+                
+                # MEMORY CLEANUP 3
+                del prev_df, prev_mtd_df
+                gc.collect()
             except Exception as e:
-                print(f"Error reading Prev OSG file: {e}", file=sys.stderr)
-                return f"Error reading Prev OSG file: {e}", 500
-            if 'Branch' in prev_df.columns: prev_df.rename(columns={'Branch': 'Store'}, inplace=True)
-            prev_df['DATE'] = pd.to_datetime(prev_df['DATE'], dayfirst=True, errors='coerce')
-            prev_df = prev_df.dropna(subset=['DATE'])
-            
-            prev_mtd_df = prev_df[prev_df['DATE'].dt.month == prev_date.month]
-            prev_mtd_agg = prev_mtd_df.groupby('Store', as_index=False).agg({'AMOUNT': 'sum'}).rename(columns={'AMOUNT': 'PREV MONTH SALE'})
-            
-            # MEMORY CLEANUP 3
-            del prev_df
-            del prev_mtd_df
-            gc.collect()
+                print(f"Warning: Could not process previous month file: {e}", file=sys.stderr)
 
-        # Merge Data
-        print("Merging data...", file=sys.stderr)
-        all_stores_set = set(future_store_df['Store'])
-        all_stores_set.update(today_agg['Store'])
-        all_stores_set.update(product_stores)
+        # =========================================================================
+        # MERGE ALL DATA
+        # =========================================================================
+        print("\n==== Merging All Data ====", file=sys.stderr)
+        
+        # Get all unique stores
+        all_stores_set = all_osg_stores.union(product_stores)
+        
+        # Try to add stores from master file if it exists
+        try:
+            future_store_df = pd.read_excel("myG All Store.xlsx", engine='openpyxl')
+            store_col = None
+            for col in future_store_df.columns:
+                if str(col).lower().strip() in ['store', 'branch']:
+                    store_col = col
+                    break
+            if store_col:
+                master_stores = set(future_store_df[store_col].astype(str).str.strip())
+                all_stores_set = all_stores_set.union(master_stores)
+                print(f"Added {len(master_stores)} stores from master file", file=sys.stderr)
+        except Exception as e:
+            print(f"Note: Could not load store master file: {e}", file=sys.stderr)
         
         all_stores = pd.DataFrame({'Store': list(all_stores_set)})
+        print(f"Total unique stores: {len(all_stores)}", file=sys.stderr)
         
-        report_df = all_stores.merge(today_agg, on='Store', how='left') \
-                              .merge(mtd_agg, on='Store', how='left') \
-                              .merge(product_today_agg, on='Store', how='left') \
-                              .merge(product_mtd_agg, on='Store', how='left') \
-                              .merge(prev_mtd_agg, on='Store', how='left') \
-                              .merge(rbm_df[['Store', 'RBM']], on='Store', how='left')
-
+        # Perform sequential merges
+        report_df = all_stores \
+            .merge(today_agg, on='Store', how='left') \
+            .merge(mtd_agg, on='Store', how='left') \
+            .merge(product_today_agg, on='Store', how='left') \
+            .merge(product_mtd_agg, on='Store', how='left') \
+            .merge(prev_mtd_agg, on='Store', how='left')
+        
+        # Merge RBM data if available from uploaded file
+        if has_rbm:
+            report_df = report_df.merge(rbm_stores, on='Store', how='left')
+            print(f"Merged RBM data from uploaded file", file=sys.stderr)
+        else:
+            # Try to load from master file as fallback
+            try:
+                rbm_master = pd.read_excel("RBM,BDM,BRANCH.xlsx", engine='openpyxl')
+                # Normalize RBM master columns
+                rbm_renames = {}
+                for col in rbm_master.columns:
+                    col_lower = str(col).lower().strip()
+                    if col_lower in ['branch', 'store']:
+                        rbm_renames[col] = 'Store'
+                    elif col_lower in ['rbm', 'manager']:
+                        rbm_renames[col] = 'RBM'
+                if rbm_renames:
+                    rbm_master.rename(columns=rbm_renames, inplace=True)
+                if 'Store' in rbm_master.columns and 'RBM' in rbm_master.columns:
+                    rbm_master = rbm_master[['Store', 'RBM']].copy()
+                    rbm_master['Store'] = rbm_master['Store'].astype(str).str.strip()
+                    rbm_master['RBM'] = rbm_master['RBM'].astype(str).str.strip()
+                    report_df = report_df.merge(rbm_master, on='Store', how='left')
+                    print(f"Merged RBM data from master file", file=sys.stderr)
+            except Exception as e:
+                print(f"No RBM data available: {e}", file=sys.stderr)
+                report_df['RBM'] = 'Unknown'
+        
+        print(f"Final merged data: {report_df.shape}", file=sys.stderr)
+        
+        # Ensure all required columns exist
         required_columns = ['Store', 'FTD Count', 'FTD Value', 'Product_FTD_Amount', 'MTD Count', 'MTD Value', 'Product_MTD_Amount', 'PREV MONTH SALE', 'RBM']
         for col in required_columns:
             if col not in report_df.columns:
                 report_df[col] = 0
+        
+        # Fill NaN values and convert to integers
+        report_df[['FTD Count', 'FTD Value', 'MTD Count', 'MTD Value', 'Product_FTD_Count', 'Product_FTD_Amount', 'Product_MTD_Count', 'Product_MTD_Amount', 'PREV MONTH SALE']] = \
+            report_df[['FTD Count', 'FTD Value', 'MTD Count', 'MTD Value', 'Product_FTD_Count', 'Product_FTD_Amount', 'Product_MTD_Count', 'Product_MTD_Amount', 'PREV MONTH SALE']].fillna(0).astype(int)
+        
+        # Rename Store to Store Name for display
         report_df = report_df.rename(columns={'Store': 'Store Name'})
-
-        report_df[['FTD Count', 'FTD Value', 'MTD Count', 'MTD Value', 'Product_FTD_Count', 'Product_FTD_Amount', 'Product_MTD_Count', 'Product_MTD_Amount', 'PREV MONTH SALE']] = report_df[['FTD Count', 'FTD Value', 'MTD Count', 'MTD Value', 'Product_FTD_Count', 'Product_FTD_Amount', 'Product_MTD_Count', 'Product_MTD_Amount', 'PREV MONTH SALE']].fillna(0).astype(int)
-
-        # Calculations (Streamlit Logic)
+        
+        # =========================================================================
+        # CALCULATE METRICS
+        # =========================================================================
+        print("Calculating metrics...", file=sys.stderr)
+        
         report_df['DIFF %'] = report_df.apply(
             lambda x: round(((x['MTD Value'] - x['PREV MONTH SALE']) / x['PREV MONTH SALE']) * 100, 2) if x['PREV MONTH SALE'] != 0 else 0,
             axis=1
@@ -355,13 +463,13 @@ def process_report1():
             lambda x: round((x['MTD Value'] / x['Product_MTD_Amount']) * 100, 2) if x['Product_MTD_Amount'] != 0 else 0,
             axis=1
         )
-
+        
         print("Generating Excel...", file=sys.stderr)
         excel_output = BytesIO()
         with pd.ExcelWriter(excel_output, engine='xlsxwriter') as writer:
             workbook = writer.book
             
-            # --- STYLES AND FORMATS FROM STREAMLIT ---
+            # Styles
             colors_palette = {
                 'primary_blue': '#1E3A8A', 'light_blue': '#DBEAFE', 'success_green': '#065F46', 'light_green': '#D1FAE5',
                 'warning_orange': '#EA580C', 'light_orange': '#FED7AA', 'danger_red': '#DC2626', 'light_red': '#FEE2E2',
@@ -385,6 +493,10 @@ def process_report1():
                 'conversion_format_alt': workbook.add_format({'font_size': 10, 'align': 'center', 'valign': 'vcenter', 'border': 1, 'border_color': colors_palette['neutral_gray'], 'bg_color': colors_palette['light_royal'], 'num_format': '0.00%'}),
                 'total_row': workbook.add_format({'bold': True, 'font_size': 11, 'font_color': colors_palette['white'], 'bg_color': colors_palette['mint_green'], 'align': 'center', 'valign': 'vcenter', 'border': 2, 'border_color': colors_palette['mint_green']}),
                 'total_label': workbook.add_format({'bold': True, 'font_size': 11, 'font_color': colors_palette['white'], 'bg_color': colors_palette['mint_green'], 'align': 'center', 'valign': 'vcenter', 'border': 2, 'border_color': colors_palette['mint_green']}),
+                'asp_format': workbook.add_format({'font_size': 10, 'align': 'center', 'valign': 'vcenter', 'border': 1,  'border_color': colors_palette['neutral_gray'], 'num_format': '₹#,##0.00'}),
+                'asp_format_alt': workbook.add_format({'font_size': 10, 'align': 'center', 'valign': 'vcenter', 'border': 1, 'border_color': colors_palette['neutral_gray'], 'bg_color': colors_palette['light_royal'], 'num_format': '₹#,##0.00'}),
+                'asp_total': workbook.add_format({'bold': True, 'font_size': 12, 'font_color': colors_palette['white'], 'bg_color': colors_palette['mint_green'], 'align': 'center', 'valign': 'vcenter', 'border': 2, 'border_color': colors_palette['mint_green'], 'num_format': '₹#,##0.00'}),
+                # RBM formats
                 'rbm_title': workbook.add_format({'bold': True, 'font_size': 18, 'font_color': colors_palette['white'], 'bg_color': colors_palette['dark_blue'], 'align': 'center', 'valign': 'vcenter', 'border': 2, 'border_color': colors_palette['dark_blue']}),
                 'rbm_subtitle': workbook.add_format({'bold': True, 'font_size': 11, 'font_color': colors_palette['dark_blue'], 'bg_color': colors_palette['light_royal'], 'align': 'center', 'valign': 'vcenter', 'border': 1, 'border_color': colors_palette['royal_blue'], 'italic': True}),
                 'rbm_header': workbook.add_format({'bold': True, 'font_size': 11, 'font_color': colors_palette['white'], 'bg_color': colors_palette['royal_blue'], 'align': 'center', 'valign': 'vcenter', 'border': 1, 'border_color': colors_palette['royal_blue'], 'text_wrap': True}),
@@ -400,9 +512,6 @@ def process_report1():
                 'rbm_total_label': workbook.add_format({'bold': True, 'font_size': 12, 'font_color': colors_palette['white'], 'bg_color': colors_palette['mint_green'], 'align': 'center', 'valign': 'vcenter', 'border': 2, 'border_color': colors_palette['mint_green']}),
                 'rbm_summary': workbook.add_format({'bold': True, 'font_size': 10, 'font_color': colors_palette['royal_blue'], 'bg_color': colors_palette['light_royal'], 'align': 'center', 'valign': 'vcenter', 'border': 1, 'border_color': colors_palette['royal_blue']}),
                 'rbm_performance': workbook.add_format({'bold': True, 'font_size': 10, 'font_color': colors_palette['white'], 'bg_color': colors_palette['accent_purple'], 'align': 'center', 'valign': 'vcenter', 'border': 1, 'border_color': colors_palette['accent_purple']}),
-                'asp_format': workbook.add_format({'font_size': 10, 'align': 'center', 'valign': 'vcenter', 'border': 1, 'border_color': colors_palette['neutral_gray'], 'num_format': '₹#,##0.00'}),
-                'asp_format_alt': workbook.add_format({'font_size': 10, 'align': 'center', 'valign': 'vcenter', 'border': 1, 'border_color': colors_palette['neutral_gray'], 'bg_color': colors_palette['light_royal'], 'num_format': '₹#,##0.00'}),
-                'asp_total': workbook.add_format({'bold': True, 'font_size': 12, 'font_color': colors_palette['white'], 'bg_color': colors_palette['mint_green'], 'align': 'center', 'valign': 'vcenter', 'border': 2, 'border_color': colors_palette['mint_green'], 'num_format': '₹#,##0.00'})
             }
 
             ist = pytz.timezone('Asia/Kolkata')
@@ -419,10 +528,10 @@ def process_report1():
             total_stores = len(all_data)
             active_stores = len(all_data[all_data['FTD Count'] > 0])
             inactive_stores = total_stores - active_stores
-            worksheet.merge_range(3, 0, 3, 1, "📊 SUMMARY", formats['header_secondary'])
+            worksheet.merge_range(3, 0, 3, 1, "SUMMARY", formats['header_secondary'])
             worksheet.merge_range(3, 2, 3, len(headers) - 1, f"Total: {total_stores} | Active: {active_stores} | Inactive: {inactive_stores}", formats['data_normal'])
 
-            # Dynamically adjust column widths with error handling
+            # Dynamically adjust column widths
             column_widths = {}
             for i in range(len(headers)):
                 try:
@@ -465,7 +574,7 @@ def process_report1():
 
             # Total Row
             total_row = len(all_data) + 7
-            worksheet.write(total_row, 0, '🎯 TOTAL', formats['total_label'])
+            worksheet.write(total_row, 0, 'TOTAL', formats['total_label'])
             worksheet.write(total_row, 1, all_data['FTD Count'].sum(), formats['total_row'])
             worksheet.write(total_row, 2, all_data['FTD Value'].sum(), formats['total_row'])
             total_ftd_conv = round((all_data['FTD Value'].sum() / all_data['Product_FTD_Amount'].sum()) * 100, 2) if all_data['Product_FTD_Amount'].sum() != 0 else 0
@@ -483,105 +592,109 @@ def process_report1():
             if len(all_data) > 0:
                 top_performer = all_data.iloc[0]
                 insights_row = total_row + 2
-                worksheet.merge_range(insights_row, 0, insights_row, len(headers) - 1, f"🏆 Top Performer: {top_performer['Store Name']} (₹{int(top_performer['MTD Value']):,})", formats['data_normal'])
+                worksheet.merge_range(insights_row, 0, insights_row, len(headers) - 1, f"Top Performer: {top_performer['Store Name']} (Rs.{int(top_performer['MTD Value']):,})", formats['data_normal'])
 
-            # RBM SHEETS
-            rbm_headers = ['Store Name', 'MTD Value Conversion', 'FTD Value Conversion', 'MTD Count', 'FTD Count', 'MTD Value', 'FTD Value', 'PREV MONTH SALE', 'DIFF %', 'ASP']
-            for rbm in report_df['RBM'].dropna().unique():
-                rbm_data = report_df[report_df['RBM'] == rbm].sort_values('MTD Value', ascending=False)
-                worksheet_name = str(rbm)[:31]
-                rbm_ws = workbook.add_worksheet(worksheet_name)
-
-                rbm_ws.merge_range(0, 0, 0, len(rbm_headers) - 1, f" {rbm} - Sales Performance Report", formats['rbm_title'])
-                rbm_ws.merge_range(1, 0, 1, len(rbm_headers) - 1, f"Report Period: {ist_time.strftime('%B %Y')} | Generated: {ist_time.strftime('%d %B %Y %I:%M %p IST')}", formats['rbm_subtitle'])
-
-                rbm_total_stores = len(rbm_data)
-                rbm_active_stores = len(rbm_data[rbm_data['FTD Count'] > 0])
-                rbm_inactive_stores = rbm_total_stores - rbm_active_stores
-                rbm_total_amount = rbm_data['MTD Value'].sum()
-
-                rbm_ws.merge_range(3, 0, 3, 1, "📈 PERFORMANCE OVERVIEW", formats['rbm_summary'])
-                rbm_ws.merge_range(3, 2, 3, len(rbm_headers) - 1, f"Total Stores: {rbm_total_stores} | Active: {rbm_active_stores} | Inactive: {rbm_inactive_stores} | Total Revenue: ₹{rbm_total_amount:,}", formats['rbm_summary'])
-
-                if len(rbm_data) > 0:
-                    best_performer = rbm_data.iloc[0]
-                    rbm_ws.merge_range(4, 0, 4, len(rbm_headers) - 1, f"🥇 Best Performer: {best_performer['Store Name']} - ₹{int(best_performer['MTD Value']):,}", formats['rbm_performance'])
-
-                # Dynamically adjust column widths for RBM sheets
-                rbm_column_widths = {}
-                for i in range(len(rbm_headers)):
-                    try:
-                        if i == 0:
-                            max_len = max(rbm_data[rbm_headers[i]].astype(str).map(len).max(), len(rbm_headers[i])) + 2
-                        else:
-                            max_len = max(rbm_data[rbm_headers[i]].map(lambda x: len(str(x))).max() if rbm_headers[i] in rbm_data.columns else 0, len(rbm_headers[i])) + 2
-                        rbm_column_widths[i] = max(max_len, 10)
-                    except KeyError:
-                        rbm_column_widths[i] = len(rbm_headers[i]) + 2
-                    rbm_ws.set_column(i, i, rbm_column_widths[i])
-
-                for col, header in enumerate(rbm_headers):
-                    rbm_ws.write(6, col, header, formats['rbm_header'])
-
-                for row_idx, (_, row) in enumerate(rbm_data.iterrows(), start=7):
-                    is_alt = (row_idx - 7) % 2 == 1
-                    rbm_ws.write(row_idx, 0, row['Store Name'], formats['rbm_store_name_alt'] if is_alt else formats['rbm_store_name'])
+            # RBM SHEETS (if RBM data exists)
+            if 'RBM' in report_df.columns:
+                rbm_headers = ['Store Name', 'MTD Value Conversion', 'FTD Value Conversion', 'MTD Count', 'FTD Count', 'MTD Value', 'FTD Value', 'PREV MONTH SALE', 'DIFF %', 'ASP']
+                for rbm in report_df['RBM'].dropna().unique():
+                    if str(rbm) == 'Unknown' or str(rbm) == 'nan':
+                        continue
                     
-                    mtd_conv = row['MTD Value Conversion']
-                    fmt = formats['rbm_conversion_format_alt'] if is_alt else formats['rbm_conversion_format']
-                    if mtd_conv > 2: rbm_ws.write(row_idx, 1, mtd_conv/100, formats['rbm_conversion_green'])
-                    elif mtd_conv < 2: rbm_ws.write(row_idx, 1, mtd_conv/100, formats['rbm_conversion_low'])
-                    else: rbm_ws.write(row_idx, 1, mtd_conv/100, fmt)
+                    rbm_data = report_df[report_df['RBM'] == rbm].sort_values('MTD Value', ascending=False)
+                    worksheet_name = str(rbm)[:31]
+                    rbm_ws = workbook.add_worksheet(worksheet_name)
 
-                    ftd_conv = row['FTD Value Conversion']
-                    fmt = formats['rbm_conversion_format_alt'] if is_alt else formats['rbm_conversion_format']
-                    if ftd_conv > 2: rbm_ws.write(row_idx, 2, ftd_conv/100, formats['rbm_conversion_green'])
-                    elif ftd_conv < 2: rbm_ws.write(row_idx, 2, ftd_conv/100, formats['rbm_conversion_low'])
-                    else: rbm_ws.write(row_idx, 2, ftd_conv/100, fmt)
+                    rbm_ws.merge_range(0, 0, 0, len(rbm_headers) - 1, f"{rbm} - Sales Performance Report", formats['rbm_title'])
+                    rbm_ws.merge_range(1, 0, 1, len(rbm_headers) - 1, f"Report Period: {ist_time.strftime('%B %Y')} | Generated: {ist_time.strftime('%d %B %Y %I:%M %p IST')}", formats['rbm_subtitle'])
 
-                    data_fmt = formats['rbm_data_alternate'] if is_alt else formats['rbm_data_normal']
-                    rbm_ws.write(row_idx, 3, int(row['MTD Count']), data_fmt)
-                    rbm_ws.write(row_idx, 4, int(row['FTD Count']), data_fmt)
-                    rbm_ws.write(row_idx, 5, int(row['MTD Value']), data_fmt)
-                    rbm_ws.write(row_idx, 6, int(row['FTD Value']), data_fmt)
-                    rbm_ws.write(row_idx, 7, int(row['PREV MONTH SALE']), data_fmt)
-                    rbm_ws.write(row_idx, 8, f"{row['DIFF %']}%", data_fmt)
-                    rbm_ws.write(row_idx, 9, row['ASP'], formats['asp_format_alt'] if is_alt else formats['asp_format'])
+                    rbm_total_stores = len(rbm_data)
+                    rbm_active_stores = len(rbm_data[rbm_data['FTD Count'] > 0])
+                    rbm_inactive_stores = rbm_total_stores - rbm_active_stores
+                    rbm_total_amount = rbm_data['MTD Value'].sum()
 
-                total_row = len(rbm_data) + 8
-                rbm_ws.write(total_row, 0, '🎯 TOTAL', formats['rbm_total_label'])
-                rbm_total_mtd = round((rbm_data['MTD Value'].sum() / rbm_data['Product_MTD_Amount'].sum()) * 100, 2) if rbm_data['Product_MTD_Amount'].sum() != 0 else 0
-                rbm_ws.write(total_row, 1, f"{rbm_total_mtd}%", formats['rbm_total'])
-                rbm_total_ftd = round((rbm_data['FTD Value'].sum() / rbm_data['Product_FTD_Amount'].sum()) * 100, 2) if rbm_data['Product_FTD_Amount'].sum() != 0 else 0
-                rbm_ws.write(total_row, 2, f"{rbm_total_ftd}%", formats['rbm_total'])
-                rbm_ws.write(total_row, 3, rbm_data['MTD Count'].sum(), formats['rbm_total'])
-                rbm_ws.write(total_row, 4, rbm_data['FTD Count'].sum(), formats['rbm_total'])
-                rbm_ws.write(total_row, 5, rbm_data['MTD Value'].sum(), formats['rbm_total'])
-                rbm_ws.write(total_row, 6, rbm_data['FTD Value'].sum(), formats['rbm_total'])
-                rbm_ws.write(total_row, 7, rbm_data['PREV MONTH SALE'].sum(), formats['rbm_total'])
-                
-                total_prev = rbm_data['PREV MONTH SALE'].sum()
-                total_curr = rbm_data['MTD Value'].sum()
-                growth = round(((total_curr - total_prev) / total_prev) * 100, 2) if total_prev != 0 else 0
-                rbm_ws.write(total_row, 8, f"{growth}%", formats['rbm_total'])
-                
-                overall_asp = round(rbm_data['MTD Value'].sum() / rbm_data['MTD Count'].sum(), 2) if rbm_data['MTD Count'].sum() != 0 else 0
-                rbm_ws.write(total_row, 9, overall_asp, formats['asp_total'])
+                    rbm_ws.merge_range(3, 0, 3, 1, "PERFORMANCE OVERVIEW", formats['rbm_summary'])
+                    rbm_ws.merge_range(3, 2, 3, len(rbm_headers) - 1, f"Total Stores: {rbm_total_stores} | Active: {rbm_active_stores} | Inactive: {rbm_inactive_stores} | Total Revenue: Rs.{rbm_total_amount:,}", formats['rbm_summary'])
 
-                # Insights Section (Streamlit Logic)
-                insights_row = total_row + 2
-                if growth > 15:
-                    rbm_ws.merge_range(insights_row, 0, insights_row, len(rbm_headers) - 1, f"📈 Excellent Growth: {growth}% increase from previous month", formats['rbm_summary'])
-                elif growth < 0:
-                    rbm_ws.merge_range(insights_row, 0, insights_row, len(rbm_headers) - 1, f"📉 Needs Attention: {abs(growth)}% decrease from previous month", formats['rbm_summary'])
-                else:
-                    rbm_ws.merge_range(insights_row, 0, insights_row, len(rbm_headers) - 1, f"📊 Stable Performance: Less change from previous month", formats['rbm_summary'])
+                    if len(rbm_data) > 0:
+                        best_performer = rbm_data.iloc[0]
+                        rbm_ws.merge_range(4, 0, 4, len(rbm_headers) - 1, f"Best Performer: {best_performer['Store Name']} - Rs.{int(best_performer['MTD Value']):,}", formats['rbm_performance'])
 
-                insights_row += 1
-                top_3_stores = rbm_data.head(3)
-                if len(top_3_stores) > 0:
-                    top_stores_text = " | ".join([f"{store['Store Name']}: ₹{int(store['MTD Value']):,}" for _, store in top_3_stores.iterrows()])
-                    rbm_ws.merge_range(insights_row, 0, insights_row, len(rbm_headers) - 1, f"🏆 Top 3 Performers: {top_stores_text}", formats['rbm_summary'])
+                    # Dynamically adjust column widths for RBM sheets
+                    rbm_column_widths = {}
+                    for i in range(len(rbm_headers)):
+                        try:
+                            if i == 0:
+                                max_len = max(rbm_data[rbm_headers[i]].astype(str).map(len).max(), len(rbm_headers[i])) + 2
+                            else:
+                                max_len = max(rbm_data[rbm_headers[i]].map(lambda x: len(str(x))).max() if rbm_headers[i] in rbm_data.columns else 0, len(rbm_headers[i])) + 2
+                            rbm_column_widths[i] = max(max_len, 10)
+                        except KeyError:
+                            rbm_column_widths[i] = len(rbm_headers[i]) + 2
+                        rbm_ws.set_column(i, i, rbm_column_widths[i])
+
+                    for col, header in enumerate(rbm_headers):
+                        rbm_ws.write(6, col, header, formats['rbm_header'])
+
+                    for row_idx, (_, row) in enumerate(rbm_data.iterrows(), start=7):
+                        is_alt = (row_idx - 7) % 2 == 1
+                        rbm_ws.write(row_idx, 0, row['Store Name'], formats['rbm_store_name_alt'] if is_alt else formats['rbm_store_name'])
+                        
+                        mtd_conv = row['MTD Value Conversion']
+                        fmt = formats['rbm_conversion_format_alt'] if is_alt else formats['rbm_conversion_format']
+                        if mtd_conv > 2: rbm_ws.write(row_idx, 1, mtd_conv/100, formats['rbm_conversion_green'])
+                        elif mtd_conv < 2: rbm_ws.write(row_idx, 1, mtd_conv/100, formats['rbm_conversion_low'])
+                        else: rbm_ws.write(row_idx, 1, mtd_conv/100, fmt)
+
+                        ftd_conv = row['FTD Value Conversion']
+                        fmt = formats['rbm_conversion_format_alt'] if is_alt else formats['rbm_conversion_format']
+                        if ftd_conv > 2: rbm_ws.write(row_idx, 2, ftd_conv/100, formats['rbm_conversion_green'])
+                        elif ftd_conv < 2: rbm_ws.write(row_idx, 2, ftd_conv/100, formats['rbm_conversion_low'])
+                        else: rbm_ws.write(row_idx, 2, ftd_conv/100, fmt)
+
+                        data_fmt = formats['rbm_data_alternate'] if is_alt else formats['rbm_data_normal']
+                        rbm_ws.write(row_idx, 3, int(row['MTD Count']), data_fmt)
+                        rbm_ws.write(row_idx, 4, int(row['FTD Count']), data_fmt)
+                        rbm_ws.write(row_idx, 5, int(row['MTD Value']), data_fmt)
+                        rbm_ws.write(row_idx, 6, int(row['FTD Value']), data_fmt)
+                        rbm_ws.write(row_idx, 7, int(row['PREV MONTH SALE']), data_fmt)
+                        rbm_ws.write(row_idx, 8, f"{row['DIFF %']}%", data_fmt)
+                        rbm_ws.write(row_idx, 9, row['ASP'], formats['asp_format_alt'] if is_alt else formats['asp_format'])
+
+                    total_row = len(rbm_data) + 8
+                    rbm_ws.write(total_row, 0, 'TOTAL', formats['rbm_total_label'])
+                    rbm_total_mtd = round((rbm_data['MTD Value'].sum() / rbm_data['Product_MTD_Amount'].sum()) * 100, 2) if rbm_data['Product_MTD_Amount'].sum() != 0 else 0
+                    rbm_ws.write(total_row, 1, f"{rbm_total_mtd}%", formats['rbm_total'])
+                    rbm_total_ftd = round((rbm_data['FTD Value'].sum() / rbm_data['Product_FTD_Amount'].sum()) * 100, 2) if rbm_data['Product_FTD_Amount'].sum() != 0 else 0
+                    rbm_ws.write(total_row, 2, f"{rbm_total_ftd}%", formats['rbm_total'])
+                    rbm_ws.write(total_row, 3, rbm_data['MTD Count'].sum(), formats['rbm_total'])
+                    rbm_ws.write(total_row, 4, rbm_data['FTD Count'].sum(), formats['rbm_total'])
+                    rbm_ws.write(total_row, 5, rbm_data['MTD Value'].sum(), formats['rbm_total'])
+                    rbm_ws.write(total_row, 6, rbm_data['FTD Value'].sum(), formats['rbm_total'])
+                    rbm_ws.write(total_row, 7, rbm_data['PREV MONTH SALE'].sum(), formats['rbm_total'])
+                    
+                    total_prev = rbm_data['PREV MONTH SALE'].sum()
+                    total_curr = rbm_data['MTD Value'].sum()
+                    growth = round(((total_curr - total_prev) / total_prev) * 100, 2) if total_prev != 0 else 0
+                    rbm_ws.write(total_row, 8, f"{growth}%", formats['rbm_total'])
+                    
+                    overall_asp = round(rbm_data['MTD Value'].sum() / rbm_data['MTD Count'].sum(), 2) if rbm_data['MTD Count'].sum() != 0 else 0
+                    rbm_ws.write(total_row, 9, overall_asp, formats['asp_total'])
+
+                    # Insights Section
+                    insights_row = total_row + 2
+                    if growth > 15:
+                        rbm_ws.merge_range(insights_row, 0, insights_row, len(rbm_headers) - 1, f"Excellent Growth: {growth}% increase from previous month", formats['rbm_summary'])
+                    elif growth < 0:
+                        rbm_ws.merge_range(insights_row, 0, insights_row, len(rbm_headers) - 1, f"Needs Attention: {abs(growth)}% decrease from previous month", formats['rbm_summary'])
+                    else:
+                        rbm_ws.merge_range(insights_row, 0, insights_row, len(rbm_headers) - 1, f"Stable Performance: Less change from previous month", formats['rbm_summary'])
+
+                    insights_row += 1
+                    top_3_stores = rbm_data.head(3)
+                    if len(top_3_stores) > 0:
+                        top_stores_text = " | ".join([f"{store['Store Name']}: Rs.{int(store['MTD Value']):,}" for _, store in top_3_stores.iterrows()])
+                        rbm_ws.merge_range(insights_row, 0, insights_row, len(rbm_headers) - 1, f"Top 3 Performers: {top_stores_text}", formats['rbm_summary'])
 
         excel_output.seek(0)
         return send_file(excel_output, as_attachment=True, download_name=f"OSG_Sales_Report_{datetime.now().strftime('%Y%m%d')}.xlsx", mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")

@@ -153,14 +153,12 @@ def process_report1():
             print(f"Error loading master files: {e}", file=sys.stderr)
             return f"ERROR loading master files: {e}", 500
         
-        print("Reading OSG file (using calamine)...", file=sys.stderr)
-        
+        print("Reading OSG file...", file=sys.stderr)
         try:
-            book1_df = pd.read_excel(curr_osg_file, engine='calamine')
-        except Exception as e:
-            print(f"Calamine failed, falling back to openpyxl: {e}", file=sys.stderr)
-            curr_osg_file.seek(0)
             book1_df = pd.read_excel(curr_osg_file, engine='openpyxl')
+        except Exception as e:
+            print(f"Error reading OSG file: {e}", file=sys.stderr)
+            return f"Error reading OSG file: {e}", 500
         print(f"OSG file read. Shape: {book1_df.shape}", file=sys.stderr)
         
         # Normalize OSG Columns
@@ -178,7 +176,70 @@ def process_report1():
         
         book1_df['DATE'] = pd.to_datetime(book1_df['DATE'], dayfirst=True, errors='coerce')
         book1_df = book1_df.dropna(subset=['DATE'])
-        rbm_df.rename(columns={'Branch': 'Store'}, inplace=True)
+        
+        # =========================================================================
+        # COMPREHENSIVE RBM COLUMN NORMALIZATION
+        # =========================================================================
+        print(f"\n==== RBM DataFrame Column Normalization ====", file=sys.stderr)
+        print(f"Original columns: {list(rbm_df.columns)}", file=sys.stderr)
+        print(f"DataFrame shape: {rbm_df.shape}", file=sys.stderr)
+        
+        # Create a column mapping dictionary for case-insensitive matching
+        column_mapping = {}
+        
+        # Find Store/Branch column (case-insensitive)
+        store_col_found = False
+        for col in rbm_df.columns:
+            col_lower = str(col).lower().strip()
+            if col_lower in ['store', 'branch', 'store name', 'branch name', 'storename', 'branchname']:
+                if col != 'Store':  # Only rename if not already 'Store'
+                    column_mapping[col] = 'Store'
+                    print(f"  Mapping '{col}' -> 'Store'", file=sys.stderr)
+                else:
+                    print(f"  Column 'Store' already exists", file=sys.stderr)
+                store_col_found = True
+                break
+        
+        # Find RBM column (case-insensitive)
+        rbm_col_found = False
+        for col in rbm_df.columns:
+            col_lower = str(col).lower().strip()
+            if col_lower in ['rbm', 'rbm name', 'rbmname', 'manager', 'regional manager', 'rm']:
+                if col != 'RBM':  # Only rename if not already 'RBM'
+                    column_mapping[col] = 'RBM'
+                    print(f"  Mapping '{col}' -> 'RBM'", file=sys.stderr)
+                else:
+                    print(f"  Column 'RBM' already exists", file=sys.stderr)
+                rbm_col_found = True
+                break
+        
+        # Apply the column mappings
+        if column_mapping:
+            rbm_df.rename(columns=column_mapping, inplace=True)
+            print(f"Applied column mappings: {column_mapping}", file=sys.stderr)
+            print(f"Columns after mapping: {list(rbm_df.columns)}", file=sys.stderr)
+        
+        # Validate required columns exist
+        if not store_col_found or 'Store' not in rbm_df.columns:
+            error_msg = f"ERROR: RBM file missing 'Store' or 'Branch' column.\nAvailable columns: {list(rbm_df.columns)}\nPlease ensure the Excel file has a column named 'Store', 'Branch', or similar."
+            print(error_msg, file=sys.stderr)
+            return error_msg, 400
+            
+        if not rbm_col_found or 'RBM' not in rbm_df.columns:
+            error_msg = f"ERROR: RBM file missing 'RBM' column.\nAvailable columns: {list(rbm_df.columns)}\nPlease ensure the Excel file has a column named 'RBM', 'Manager', or similar."
+            print(error_msg, file=sys.stderr)
+            return error_msg, 400
+        
+        # Clean up the data - keep only what we need
+        rbm_df = rbm_df[['Store', 'RBM']].copy()
+        rbm_df['Store'] = rbm_df['Store'].astype(str).str.strip()  # Remove whitespace
+        rbm_df['RBM'] = rbm_df['RBM'].astype(str).str.strip()
+        rbm_df = rbm_df[rbm_df['Store'] != 'nan']  # Remove rows with NaN store names
+        rbm_df = rbm_df[rbm_df['RBM'] != 'nan']  # Remove rows with NaN RBM names
+        
+        print(f"Final RBM DataFrame: {len(rbm_df)} rows with columns: {list(rbm_df.columns)}", file=sys.stderr)
+        print(f"Sample data:\n{rbm_df.head(3).to_string()}", file=sys.stderr)
+        print(f"==== End RBM Normalization ====\n", file=sys.stderr)
         
         # Aggregates for OSG
         mtd_df = book1_df[book1_df['DATE'].dt.month == report_date.month]
@@ -195,13 +256,12 @@ def process_report1():
         gc.collect()
 
         # Process Product File
-        print("Reading Product file (using calamine)...", file=sys.stderr)
+        print("Reading Product file...", file=sys.stderr)
         try:
-            product_df = pd.read_excel(product_file, engine='calamine')
-        except Exception as e:
-            print(f"Calamine failed for product, falling back to openpyxl: {e}", file=sys.stderr)
-            product_file.seek(0)
             product_df = pd.read_excel(product_file, engine='openpyxl')
+        except Exception as e:
+            print(f"Error reading Product file: {e}", file=sys.stderr)
+            return f"Error reading Product file: {e}", 500
         
         # Normalize Product Columns
         cols = product_df.columns
@@ -237,13 +297,12 @@ def process_report1():
         # Process Previous Month (Optional)
         prev_mtd_agg = pd.DataFrame(columns=['Store', 'PREV MONTH SALE'])
         if prev_osg_file and prev_osg_file.filename != '':
-            print("Reading Prev OSG file (using calamine)...", file=sys.stderr)
+            print("Reading Prev OSG file...", file=sys.stderr)
             try:
-                prev_df = pd.read_excel(prev_osg_file, engine='calamine')
-            except Exception as e:
-                print(f"Calamine failed for prev, falling back to openpyxl: {e}", file=sys.stderr)
-                prev_osg_file.seek(0)
                 prev_df = pd.read_excel(prev_osg_file, engine='openpyxl')
+            except Exception as e:
+                print(f"Error reading Prev OSG file: {e}", file=sys.stderr)
+                return f"Error reading Prev OSG file: {e}", 500
             if 'Branch' in prev_df.columns: prev_df.rename(columns={'Branch': 'Store'}, inplace=True)
             prev_df['DATE'] = pd.to_datetime(prev_df['DATE'], dayfirst=True, errors='coerce')
             prev_df = prev_df.dropna(subset=['DATE'])

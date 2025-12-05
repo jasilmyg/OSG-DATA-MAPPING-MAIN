@@ -38,7 +38,8 @@ import smtplib
 # ---------------------------------------------------------------------------
 # Configuration – copy from the original Streamlit script
 # ---------------------------------------------------------------------------
-EXCEL_FILE = r"C:\Users\JASIL\Downloads\OSG-DATA-MAPPING-MAIN\Onsitego OSID (1).xlsx"
+# Use relative path for compatibility with hosted environments
+EXCEL_FILE = "Onsitego OSID (1).xlsx"
 TARGET_EMAIL = "mygloyalty3@gmail.com"
 CC_EMAILS = ["arjunpm@myg.in"]
 SMTP_SERVER = "smtp.gmail.com"

@@ -34,6 +34,7 @@ import pandas as pd
 import pytz
 import requests
 import smtplib
+import threading
 
 # ---------------------------------------------------------------------------
 # Configuration – copy from the original Streamlit script
@@ -89,6 +90,7 @@ def format_ist_datetime(dt_str: Any) -> str:
 _DF_CACHE = None
 _DF_CACHE_TIME = 0
 _MOBILE_INDEX = None
+_LOAD_LOCK = threading.Lock()
 
 def load_excel_data(path: str = EXCEL_FILE, force_reload: bool = False) -> pd.DataFrame:
     """Load the Excel workbook and normalise column names.
@@ -96,56 +98,77 @@ def load_excel_data(path: str = EXCEL_FILE, force_reload: bool = False) -> pd.Da
     Uses a global cache to avoid re-reading the file on every request.
     Reloads if the file has changed or if force_reload is True.
     Also builds a hash map index for O(1) mobile number lookups.
+    Thread-safe to prevent race conditions.
     """
     global _DF_CACHE, _DF_CACHE_TIME, _MOBILE_INDEX
     
-    try:
-        # Check if file exists
-        if not os.path.exists(path):
-            raise FileNotFoundError(f"Excel file not found at: {path}")
+    # Fast check without lock first
+    if _DF_CACHE is not None and not force_reload:
+        try:
+            if os.path.exists(path) and os.path.getmtime(path) <= _DF_CACHE_TIME:
+                return _DF_CACHE
+        except:
+            pass # Fall through to full check
+
+    with _LOAD_LOCK:
+        try:
+            # Check if file exists
+            if not os.path.exists(path):
+                # Try absolute path if relative fails (fallback)
+                abs_path = os.path.join(os.getcwd(), path)
+                if os.path.exists(abs_path):
+                    path = abs_path
+                else:
+                    raise FileNotFoundError(f"Excel file not found at: {path}")
+                
+            file_mtime = os.path.getmtime(path)
             
-        file_mtime = os.path.getmtime(path)
-        
-        # Return cached version if valid
-        if _DF_CACHE is not None and not force_reload and file_mtime <= _DF_CACHE_TIME:
-            return _DF_CACHE
+            # Double-check cache inside lock
+            if _DF_CACHE is not None and not force_reload and file_mtime <= _DF_CACHE_TIME:
+                return _DF_CACHE
+                
+            # Load data
+            print(f"Loading Excel data from {path}...", file=sys.stderr)
+            start_time = time.time()
             
-        # Load data
-        print(f"Loading Excel data from {path}...", file=sys.stderr)
-        start_time = time.time()
-        df = pd.read_excel(path)
-        df.columns = (
-            df.columns.astype(str)
-            .str.strip()
-            .str.replace("\u00A0", " ")
-            .str.lower()
-            .str.replace(r"\s+", " ", regex=True)
-        )
-        
-        # Build high-speed index for mobile numbers
-        print("Building high-speed mobile index...", file=sys.stderr)
-        mobile_col = resolve_column(df, ["mobile no", "mobile", "mobile_no", "mobile no rf"])
-        
-        # Create a dictionary mapping mobile -> list of indices
-        # This allows O(1) lookup instead of O(N) scanning
-        _MOBILE_INDEX = {}
-        
-        # Convert to string, strip whitespace and decimals (e.g. 999.0 -> 999)
-        mobiles = df[mobile_col].astype(str).str.strip().str.replace(r'\.0$', '', regex=True)
-        
-        for idx, mob in mobiles.items():
-            if mob not in _MOBILE_INDEX:
-                _MOBILE_INDEX[mob] = []
-            _MOBILE_INDEX[mob].append(idx)
+            # Optimization: Read as string for mobile/serial to avoid conversion overhead later
+            # We can't know exact column names yet, so we read all, but we can try to be efficient
+            df = pd.read_excel(path)
             
-        # Update cache
-        _DF_CACHE = df
-        _DF_CACHE_TIME = file_mtime
-        print(f"Data loaded and indexed in {time.time() - start_time:.2f}s", file=sys.stderr)
-        
-        return df
-    except Exception as exc:
-        raise RuntimeError(f"Failed to read Excel file '{path}': {exc}")
+            df.columns = (
+                df.columns.astype(str)
+                .str.strip()
+                .str.replace("\u00A0", " ")
+                .str.lower()
+                .str.replace(r"\s+", " ", regex=True)
+            )
+            
+            # Build high-speed index for mobile numbers
+            print("Building high-speed mobile index...", file=sys.stderr)
+            mobile_col = resolve_column(df, ["mobile no", "mobile", "mobile_no", "mobile no rf"])
+            
+            # Create a dictionary mapping mobile -> list of indices
+            _MOBILE_INDEX = {}
+            
+            # Convert to string, strip whitespace and decimals
+            mobiles = df[mobile_col].astype(str).str.strip().str.replace(r'\.0$', '', regex=True)
+            
+            for idx, mob in mobiles.items():
+                if mob not in _MOBILE_INDEX:
+                    _MOBILE_INDEX[mob] = []
+                _MOBILE_INDEX[mob].append(idx)
+                
+            # Update cache
+            _DF_CACHE = df
+            _DF_CACHE_TIME = file_mtime
+            print(f"Data loaded and indexed in {time.time() - start_time:.2f}s", file=sys.stderr)
+            
+            return df
+        except Exception as exc:
+            # Log the full error to help debugging on server
+            import traceback
+            traceback.print_exc()
+            raise RuntimeError(f"Failed to read Excel file '{path}': {exc}")
 
 
 def resolve_column(df: pd.DataFrame, variants: List[str]) -> str:

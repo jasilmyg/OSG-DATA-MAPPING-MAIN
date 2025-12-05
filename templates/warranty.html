@@ -1,0 +1,354 @@
+{% extends "base.html" %}
+
+{% block title %}Claims · OSG Portal{% endblock %}
+
+{% block content %}
+<div class="page-header fade-in">
+    <h1 class="page-title">Warranty Claims</h1>
+    <p class="page-subtitle">Submit and track warranty claims efficiently</p>
+</div>
+
+<div class="card fade-in" style="animation-delay: 0.1s; max-width: 1200px; margin: 0 auto;">
+    <div
+        style="display: flex; gap: var(--spacing-lg); margin-bottom: var(--spacing-xl); border-bottom: var(--border-width) solid var(--border-grey); padding-bottom: var(--spacing-xs);">
+        <button class="tab-btn active" onclick="switchTab('submit')">
+            <i class="fa-solid fa-plus-circle"></i> Submit Claim
+        </button>
+        <button class="tab-btn" onclick="switchTab('track')">
+            <i class="fa-solid fa-list-check"></i> Track Claims
+        </button>
+    </div>
+
+    <!-- TAB 1: SUBMIT -->
+    <div id="tab-submit" class="tab-content">
+        <form id="claim-form" enctype="multipart/form-data">
+            <div class="form-group">
+                <label class="form-label">Customer Mobile Number</label>
+                <div style="display: flex; gap: var(--spacing-sm);">
+                    <input type="text" id="mobile_no" name="mobile_no" class="form-control"
+                        placeholder="Enter 10-digit mobile number" maxlength="10" required>
+                    <button type="button" class="btn btn-primary" onclick="lookupCustomer()">
+                        <i class="fa-solid fa-magnifying-glass"></i> Search
+                    </button>
+                </div>
+            </div>
+
+            <div id="customer-result" style="display: none; margin-bottom: var(--spacing-lg);">
+                <!-- Populated by JS -->
+            </div>
+
+            <div id="claim-details" style="display: none;">
+                <div class="form-group">
+                    <label class="form-label">Complete Service Address</label>
+                    <textarea name="address" id="address" class="form-control" rows="3"
+                        placeholder="Enter complete address including pincode" required></textarea>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Select Product(s)</label>
+                    <div id="product-list"
+                        style="display: grid; gap: var(--spacing-xs); max-height: 300px; overflow-y: auto; padding: var(--spacing-sm); background: var(--light-grey); border: var(--border-width) solid var(--border-grey); border-radius: var(--border-radius-sm);">
+                        <!-- Checkboxes populated by JS -->
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Issue Description</label>
+                    <textarea name="issue_description" class="form-control" rows="3" placeholder="Describe the issue..."
+                        required></textarea>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Upload Document (Optional)</label>
+                    <div class="file-upload">
+                        <input type="file" name="document" accept=".pdf,.jpg,.jpeg,.png">
+                        <i class="fa-solid fa-cloud-arrow-up file-icon"></i>
+                        <div class="file-name">Choose file</div>
+                        <div class="file-msg">PDF, JPG, PNG allowed</div>
+                    </div>
+                </div>
+
+                <button type="submit" class="btn btn-primary btn-block"
+                    style="padding: var(--spacing-md) var(--spacing-lg);">
+                    <i class="fa-solid fa-paper-plane"></i> Submit Warranty Claim
+                </button>
+            </div>
+        </form>
+    </div>
+
+    <!-- TAB 2: TRACK -->
+    <div id="tab-track" class="tab-content" style="display: none;">
+        <div class="form-group">
+            <label class="form-label">Filter by Mobile Number</label>
+            <div style="display: flex; gap: var(--spacing-sm);">
+                <input type="text" id="track-mobile" class="form-control"
+                    placeholder="Enter mobile number (or leave blank for all)">
+                <button type="button" class="btn btn-primary" onclick="fetchClaims()">
+                    <i class="fa-solid fa-arrows-rotate"></i> Refresh
+                </button>
+            </div>
+        </div>
+        <div id="claims-list" style="margin-top: var(--spacing-lg);">
+            <div style="text-align: center; color: var(--text-grey); padding: var(--spacing-xl);">
+                Click Refresh to load claims.
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .customer-card {
+        background: #f0fdf4;
+        border: var(--border-width) solid #86efac;
+        padding: var(--spacing-lg);
+        border-radius: var(--border-radius);
+        animation: fadeIn 0.5s ease-out;
+    }
+
+    .product-item {
+        background: var(--white);
+        padding: var(--spacing-sm);
+        border-radius: var(--border-radius-sm);
+        border: var(--border-width) solid var(--border-grey);
+        display: flex;
+        align-items: center;
+        gap: var(--spacing-sm);
+        transition: all 0.2s ease;
+        cursor: pointer;
+    }
+
+    .product-item:hover {
+        border-color: var(--accent-blue);
+        background: var(--light-grey);
+    }
+
+    .claim-card {
+        background: var(--white);
+        border: var(--border-width) solid var(--border-grey);
+        padding: var(--spacing-lg);
+        border-radius: var(--border-radius);
+        margin-bottom: var(--spacing-sm);
+        box-shadow: var(--shadow-sm);
+    }
+
+    .status-badge {
+        padding: 0.25rem 0.75rem;
+        border-radius: 2rem;
+        font-size: var(--font-size-xs);
+        font-weight: 600;
+        background: var(--light-grey);
+        border: var(--border-width) solid var(--border-grey);
+    }
+</style>
+
+<script>
+    function switchTab(tabName) {
+        document.querySelectorAll('.tab-content').forEach(el => el.style.display = 'none');
+        document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+
+        document.getElementById('tab-' + tabName).style.display = 'block';
+        event.target.classList.add('active');
+    }
+
+    async function lookupCustomer() {
+        const mobile = document.getElementById('mobile_no').value;
+        if (mobile.length !== 10) {
+            alert("Please enter a valid 10-digit mobile number");
+            return;
+        }
+
+        const btn = event.target;
+        const originalText = btn.innerHTML;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Searching...';
+        btn.disabled = true;
+
+        try {
+            const response = await fetch('/warranty/lookup', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ mobile: mobile })
+            });
+
+            const data = await response.json();
+
+            if (data.found) {
+                const resultDiv = document.getElementById('customer-result');
+                resultDiv.style.display = 'block';
+                resultDiv.innerHTML = `
+                    <div class="customer-card">
+                        <h3 style="color: #16a34a; margin-bottom: var(--spacing-xs); font-size: var(--font-size-base); font-weight: 600;">
+                            <i class="fas fa-check-circle"></i> Customer Found
+                        </h3>
+                        <p style="margin-bottom: 0.25rem;"><strong>Name:</strong> ${data.name}</p>
+                        <p style="margin-bottom: 0.25rem;"><strong>Mobile:</strong> ${mobile}</p>
+                        <p style="margin-bottom: 0;"><strong>Total Products:</strong> ${data.products.length}</p>
+                    </div>
+                `;
+
+                const productList = document.getElementById('product-list');
+                productList.innerHTML = data.products.map((p, index) => `
+                    <label class="product-item">
+                        <input type="checkbox" name="selected_products" value='${JSON.stringify(p)}'>
+                        <div style="font-size: var(--font-size-sm);">
+                            <div style="font-weight: 500; color: var(--text-dark);">${p.model}</div>
+                            <div style="color: var(--text-grey); font-size: var(--font-size-xs);">Inv: ${p.invoice} | Serial: ${p.serial}</div>
+                        </div>
+                    </label>
+                `).join('');
+
+                document.getElementById('claim-details').style.display = 'block';
+            } else {
+                alert("No customer found with this mobile number.");
+                document.getElementById('customer-result').style.display = 'none';
+                document.getElementById('claim-details').style.display = 'none';
+            }
+        } catch (e) {
+            alert("Error looking up customer: " + e);
+        } finally {
+            btn.innerHTML = originalText;
+            btn.disabled = false;
+        }
+    }
+
+    document.getElementById('claim-form').addEventListener('submit', async function (e) {
+        e.preventDefault();
+
+        const formData = new FormData(this);
+        const selectedProducts = [];
+        document.querySelectorAll('input[name="selected_products"]:checked').forEach(cb => {
+            selectedProducts.push(JSON.parse(cb.value));
+        });
+
+        if (selectedProducts.length === 0) {
+            alert("Please select at least one product.");
+            return;
+        }
+
+        formData.append('products_json', JSON.stringify(selectedProducts));
+
+        const btn = this.querySelector('button[type="submit"]');
+        const originalText = btn.innerHTML;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Submitting...';
+        btn.disabled = true;
+
+        try {
+            const response = await fetch('/warranty/submit', {
+                method: 'POST',
+                body: formData
+            });
+            const result = await response.json();
+
+            if (result.success) {
+                alert("✅ Claim submitted successfully!");
+                location.reload();
+            } else {
+                alert("❌ Error: " + result.message);
+            }
+        } catch (e) {
+            alert("Error submitting claim: " + e);
+        } finally {
+            btn.innerHTML = originalText;
+            btn.disabled = false;
+        }
+    });
+
+    async function fetchClaims() {
+        const mobile = document.getElementById('track-mobile').value.trim();
+        const list = document.getElementById('claims-list');
+        list.innerHTML = '<div style="text-align:center; padding: var(--spacing-xl);"><i class="fas fa-spinner fa-spin fa-2x" style="color: var(--accent-blue);"></i><div style="margin-top: var(--spacing-sm); color: var(--text-grey);">Loading claims...</div></div>';
+
+        console.log('Fetching claims for mobile:', mobile || '(all)');
+
+        try {
+            const url = `/warranty/track-data?mobile=${encodeURIComponent(mobile)}`;
+            console.log('Fetching from:', url);
+
+            const response = await fetch(url);
+            console.log('Response status:', response.status);
+
+            const text = await response.text();
+            console.log('Response text (first 200 chars):', text.substring(0, 200));
+
+            let claims;
+            try {
+                claims = JSON.parse(text);
+                console.log('Parsed claims:', claims);
+                console.log('Number of claims:', claims.length);
+            } catch (parseErr) {
+                console.error('JSON parse error:', parseErr);
+                list.innerHTML = `<div style="color: var(--danger); padding: var(--spacing-xl); text-align: center;">
+                    <i class="fa-solid fa-triangle-exclamation" style="font-size: 2rem; margin-bottom: var(--spacing-sm);"></i>
+                    <div><strong>Error:</strong> Invalid response from server</div>
+                    <small style="color: var(--text-grey); font-family: monospace;">${text.substring(0, 100)}</small>
+                </div>`;
+                return;
+            }
+
+            if (!Array.isArray(claims)) {
+                console.error('Claims is not an array:', claims);
+                list.innerHTML = `<div style="color: var(--danger); padding: var(--spacing-xl); text-align: center;">
+                    <strong>Error:</strong> Invalid data format received
+                </div>`;
+                return;
+            }
+
+            if (claims.length === 0) {
+                list.innerHTML = `<div style="text-align: center; color: var(--text-grey); padding: var(--spacing-xl);">
+                    <i class="fa-solid fa-inbox" style="font-size: 3rem; margin-bottom: var(--spacing-sm); opacity: 0.3;"></i>
+                    <div style="font-weight: 500;">No claims found${mobile ? ' for mobile number ' + mobile : ''}.</div>
+                    <div style="font-size: var(--font-size-sm); margin-top: var(--spacing-xs); opacity: 0.7;">
+                        ${mobile ? 'Try searching without a mobile number to see all claims.' : 'No claims have been submitted yet.'}
+                    </div>
+                </div>`;
+                return;
+            }
+
+            console.log('Rendering', claims.length, 'claims');
+
+            list.innerHTML = claims.map(c => `
+                <div class="claim-card">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: var(--spacing-sm);">
+                        <h3 style="font-size: var(--font-size-base); color: var(--text-dark); font-weight: 600;">${c.customer_name || 'Customer'}</h3>
+                        <span class="status-badge" style="color: ${getStatusColor(c.status)}; border-color: ${getStatusColor(c.status)};">${c.status || 'Pending'}</span>
+                    </div>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: var(--spacing-sm); font-size: var(--font-size-sm); color: var(--text-grey);">
+                        <div>
+                            <div><strong>Mobile:</strong> ${c.mobile_no || 'N/A'}</div>
+                            <div><strong>Date:</strong> ${c.submitted_date ? new Date(c.submitted_date).toLocaleString() : 'N/A'}</div>
+                        </div>
+                        <div>
+                            <div><strong>Issue:</strong> ${c.issue_description || 'N/A'}</div>
+                            <div><strong>Products:</strong> ${c.products || 'N/A'}</div>
+                        </div>
+                    </div>
+                    ${c.mobile_no ? `
+                    <div style="margin-top: var(--spacing-sm); text-align: right;">
+                        <a href="https://wa.me/91${c.mobile_no}" target="_blank" class="btn" style="padding: var(--spacing-xs) var(--spacing-sm); background: #25D366; color: white; font-size: var(--font-size-sm); text-decoration: none;">
+                            <i class="fab fa-whatsapp"></i> Chat
+                        </a>
+                    </div>
+                    ` : ''}
+                </div>
+            `).join('');
+        } catch (e) {
+            console.error('Fetch error:', e);
+            list.innerHTML = `<div style="color: var(--danger); padding: var(--spacing-xl); text-align: center;">
+                <i class="fa-solid fa-triangle-exclamation" style="font-size: 2rem; margin-bottom: var(--spacing-sm);"></i>
+                <div><strong>Error fetching claims</strong></div>
+                <div style="font-size: var(--font-size-sm); margin-top: var(--spacing-xs);">${e.message}</div>
+                <div style="font-size: var(--font-size-xs); margin-top: var(--spacing-xs); color: var(--text-grey);">Check browser console for details</div>
+            </div>`;
+        }
+    }
+
+    function getStatusColor(status) {
+        switch (status?.toLowerCase()) {
+            case 'pending': return '#f59e0b';
+            case 'approved': return '#10b981';
+            case 'rejected': return '#ef4444';
+            case 'completed': return '#0071e3';
+            default: return '#86868b';
+        }
+    }
+</script>
+{% endblock %}

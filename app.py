@@ -12,6 +12,9 @@ from openpyxl.utils.dataframe import dataframe_to_rows
 from openpyxl.utils import get_column_letter
 import sys
 import gc
+import json
+import time
+import claim_processor  # Import the new module
 
 app = Flask(__name__)
 
@@ -88,7 +91,7 @@ def highlight_row(row):
 
 @app.route("/")
 def index():
-    return render_template("index.html")
+    return redirect(url_for('mapping_page'))
 
 @app.route("/health")
 def health():
@@ -614,5 +617,249 @@ def process_report2():
         </html>
         """, 500
 
+# ---------------------------------------------------------
+# PROCESS: WARRANTY CLAIM MANAGEMENT
+# ---------------------------------------------------------
+
+@app.route("/warranty")
+def warranty_page():
+    return render_template("warranty.html")
+
+@app.route("/warranty/lookup", methods=["POST"])
+def warranty_lookup():
+    try:
+        data = request.get_json()
+        mobile = data.get("mobile", "").strip()
+        
+        if not mobile or len(mobile) != 10:
+            return {"found": False, "message": "Invalid mobile number"}, 400
+
+        # Use the stateless loader from claim_processor
+        df = claim_processor.load_excel_data()
+        customer_data = claim_processor.get_customer_records(df, mobile)
+
+        if customer_data.empty:
+            return {"found": False, "message": "No records found"}, 200
+
+        # Extract customer name safely - prioritize "name" column
+        customer_col = claim_processor.resolve_column(df, ["name", "customer name", "customer"])
+        customer_name = str(customer_data.iloc[0].get(customer_col, "Unknown"))
+
+        # Build product list
+        products = []
+        invoice_col = claim_processor.resolve_column(df, ["invoice no", "invoice", "invoice_no"])
+        model_col = claim_processor.resolve_column(df, ["model"])
+        serial_col = claim_processor.resolve_column(df, ["serial no", "serialno", "serial_no"])
+        osid_col = claim_processor.resolve_column(df, ["osid"])
+
+        for _, row in customer_data.iterrows():
+            products.append({
+                "invoice": str(row.get(invoice_col, "")),
+                "model": str(row.get(model_col, "")),
+                "serial": str(row.get(serial_col, "")),
+                "osid": str(row.get(osid_col, ""))
+            })
+
+        return {
+            "found": True,
+            "name": customer_name,
+            "products": products
+        }
+
+    except Exception as e:
+        print(f"Error in warranty lookup: {e}", file=sys.stderr)
+        return {"found": False, "message": str(e)}, 500
+
+@app.route("/warranty/submit", methods=["POST"])
+def warranty_submit():
+    try:
+        mobile = request.form.get("mobile_no")
+        address = request.form.get("address")
+        issue_desc = request.form.get("issue_description")
+        products_json = request.form.get("products_json")
+        
+        # Handle file upload
+        uploaded_file = request.files.get("document")
+        file_path = None
+        if uploaded_file and uploaded_file.filename:
+            # Save temporarily
+            import os
+            temp_dir = "temp_uploads"
+            os.makedirs(temp_dir, exist_ok=True)
+            file_path = os.path.join(temp_dir, uploaded_file.filename)
+            uploaded_file.save(file_path)
+
+        if not products_json:
+            return {"success": False, "message": "No products selected"}, 400
+
+        selected_products = json.loads(products_json)
+
+        # ---------------------------------------------------------
+        # OPTIMIZATION: Background Processing & Instant Cache Update
+        # ---------------------------------------------------------
+        
+        # 1. Update Tracking Cache Immediately (Optimistic Update)
+        global _TRACKING_CACHE, _TRACKING_CACHE_TIME
+        
+        # Get customer name for the cache
+        try:
+            df = claim_processor.load_excel_data()
+            customer_records = claim_processor.get_customer_records(df, mobile)
+            if not customer_records.empty:
+                name_col = claim_processor.resolve_column(df, ["name", "customer name", "customer"])
+                customer_name = str(customer_records.iloc[0].get(name_col, "Customer"))
+            else:
+                customer_name = "Customer"
+        except:
+            customer_name = "Customer"
+
+        new_claim = {
+            "customer_name": customer_name,
+            "mobile_no": mobile,
+            "address": address,
+            "products": "; ".join([p.get("invoice", "") for p in selected_products]),
+            "issue_description": issue_desc,
+            "status": "Pending (Processing)", # Show distinct status
+            "submitted_date": datetime.now().isoformat()
+        }
+        
+        # Initialize cache if empty
+        if _TRACKING_CACHE is None:
+            _TRACKING_CACHE = []
+            
+        # Add new claim to the TOP of the list
+        _TRACKING_CACHE.insert(0, new_claim)
+        # Extend cache TTL so this new data sticks around
+        _TRACKING_CACHE_TIME = time.time() 
+        
+        # 2. Run Heavy Processing in Background Thread
+        def process_in_background(mob, addr, prods, issue, fpath):
+            try:
+                print(f"Starting background processing for {mob}", file=sys.stderr)
+                claim_processor.process_claim(
+                    mobile=mob,
+                    address=addr,
+                    selected_products=prods,
+                    global_issue=issue,
+                    global_file_path=fpath
+                )
+                print(f"Background processing completed for {mob}", file=sys.stderr)
+                
+                # Update status in cache to "Pending" (remove Processing tag)
+                for c in _TRACKING_CACHE:
+                    if c.get("mobile_no") == mob and c.get("issue_description") == issue:
+                        c["status"] = "Pending"
+                        break
+                        
+                # Cleanup temp file
+                if fpath and os.path.exists(fpath):
+                    os.remove(fpath)
+                        
+            except Exception as e:
+                print(f"Background processing failed: {e}", file=sys.stderr)
+                # Cleanup temp file on error too
+                if fpath and os.path.exists(fpath):
+                    os.remove(fpath)
+
+        import threading
+        threading.Thread(
+            target=process_in_background,
+            args=(mobile, address, selected_products, issue_desc, file_path),
+            daemon=True
+        ).start()
+
+        # 3. Return Success Immediately
+        return {"success": True, "message": "Claim submitted successfully! Processing in background."}
+
+    except Exception as e:
+        print(f"Error in warranty submit: {e}", file=sys.stderr)
+        return {"success": False, "message": str(e)}, 500
+
+# Cache for tracking data
+_TRACKING_CACHE = None
+_TRACKING_CACHE_TIME = 0
+_TRACKING_CACHE_TTL = 60  # seconds
+
+@app.route("/warranty/track-data")
+def warranty_track_data():
+    global _TRACKING_CACHE, _TRACKING_CACHE_TIME
+    
+    try:
+        # Check cache
+        current_time = time.time()
+        if _TRACKING_CACHE is not None and (current_time - _TRACKING_CACHE_TIME) < _TRACKING_CACHE_TTL:
+            print("Serving tracking data from cache", file=sys.stderr)
+            all_claims = _TRACKING_CACHE
+        else:
+            # Proxy the request to Google Script to avoid CORS issues on client
+            import requests
+            print(f"Fetching claims from: {claim_processor.WEB_APP_URL}", file=sys.stderr)
+            response = requests.get(claim_processor.WEB_APP_URL, timeout=10)
+            print(f"Response status: {response.status_code}", file=sys.stderr)
+            
+            if response.status_code == 200:
+                try:
+                    all_claims = response.json()
+                    print(f"Retrieved {len(all_claims) if isinstance(all_claims, list) else 0} claims", file=sys.stderr)
+                    
+                    # Normalize column names - Google Sheets uses "Mobile No" but we need "mobile_no"
+                    normalized_claims = []
+                    for claim in all_claims:
+                        normalized = {}
+                        for key, value in claim.items():
+                            # Normalize keys to lowercase with underscores
+                            normalized_key = key.lower().replace(" ", "_")
+                            normalized[normalized_key] = value
+                            # Also keep original key for backward compatibility
+                            normalized[key] = value
+                        normalized_claims.append(normalized)
+                    
+                    # Update cache
+                    all_claims = normalized_claims
+                    _TRACKING_CACHE = all_claims
+                    _TRACKING_CACHE_TIME = current_time
+                    print(f"Normalized and cached {len(normalized_claims)} claims", file=sys.stderr)
+                    
+                except Exception as json_err:
+                    print(f"JSON parse error: {json_err}", file=sys.stderr)
+                    print(f"Response text: {response.text[:200]}", file=sys.stderr)
+                    return json.dumps([]), 200, {'Content-Type': 'application/json'}
+            else:
+                print(f"Non-200 status code: {response.status_code}, Response: {response.text[:200]}", file=sys.stderr)
+                return json.dumps([]), 200, {'Content-Type': 'application/json'}
+
+        # Filter if mobile provided
+        mobile = request.args.get("mobile", "").strip()
+        if mobile:
+            print(f"Filtering by mobile: {mobile}", file=sys.stderr)
+            # Check both normalized and original column names
+            filtered = [
+                c for c in all_claims 
+                if str(c.get("mobile_no", "")).strip() == mobile 
+                or str(c.get("Mobile No", "")).strip() == mobile
+            ]
+            print(f"Found {len(filtered)} matching claims", file=sys.stderr)
+            return json.dumps(filtered), 200, {'Content-Type': 'application/json'}
+        
+        return json.dumps(all_claims), 200, {'Content-Type': 'application/json'}
+
+    except Exception as e:
+        print(f"Error fetching track data: {e}", file=sys.stderr)
+        import traceback
+        traceback.print_exc(file=sys.stderr)
+        return json.dumps([]), 200, {'Content-Type': 'application/json'}
+
 if __name__ == "__main__":
+    # Pre-load data in a background thread to avoid blocking startup
+    import threading
+    def preload_data():
+        try:
+            print("Pre-loading Excel data...", file=sys.stderr)
+            claim_processor.load_excel_data()
+            print("Excel data pre-loaded successfully.", file=sys.stderr)
+        except Exception as e:
+            print(f"Failed to pre-load data: {e}", file=sys.stderr)
+            
+    threading.Thread(target=preload_data, daemon=True).start()
+    
     app.run()

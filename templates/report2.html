@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Day View Report - OSG Dashboard{% endblock %}
+{% block title %}Day View Report · OSG Portal{% endblock %}
 
 {% block content %}
 <div class="page-header fade-in">
@@ -8,10 +8,11 @@
     <p class="page-subtitle">Generate daily store performance summaries</p>
 </div>
 
-<div class="card fade-in" style="animation-delay: 0.2s; max-width: 800px; margin: 0 auto;">
+<div class="card fade-in" style="animation-delay: 0.1s; max-width: 900px; margin: 0 auto;">
     <form action="/process_report2" method="post" enctype="multipart/form-data">
 
-        <div class="grid" style="grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 2rem;">
+        <div class="grid"
+            style="grid-template-columns: 1fr 1fr; gap: var(--spacing-lg); margin-bottom: var(--spacing-lg);">
             <div class="form-group">
                 <label class="form-label">Report Date</label>
                 <input type="date" name="report_date" class="form-control" required>
@@ -19,30 +20,28 @@
             <div class="form-group">
                 <label class="form-label">Time Slot</label>
                 <select name="time_slot" class="form-control" required>
-                    <option value="" disabled selected>Select Time Slot</option>
-                    <option value="11:30 AM">11:30 AM</option>
-                    <option value="02:30 PM">02:30 PM</option>
-                    <option value="05:30 PM">05:30 PM</option>
-                    <option value="08:30 PM">08:30 PM</option>
-                    <option value="Closing">Closing</option>
+                    <option value="" disabled selected>Select time slot</option>
+                    <option value="12:30 PM">12:30 PM</option>
+                    <option value="01:00 PM">01:00 PM</option>
+                    <option value="04:00 PM">04:00 PM</option>
+                    <option value="06:00 PM">06:00 PM</option>
                 </select>
             </div>
         </div>
 
-        <div class="form-group" style="margin-bottom: 2.5rem;">
+        <div class="form-group" style="margin-bottom: var(--spacing-xl);">
             <label class="form-label">Daily Sales File</label>
             <div class="file-upload">
                 <input type="file" name="sales_file" accept=".xlsx" required>
-                <i class="fas fa-file-invoice-dollar file-icon"></i>
-                <div class="file-name">Click or Drag to Upload</div>
-                <div class="file-msg" style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0.25rem;">Upload
-                    the daily sales dump (xlsx)</div>
+                <i class="fa-solid fa-file-invoice-dollar file-icon"></i>
+                <div class="file-name">Choose file</div>
+                <div class="file-msg">Upload daily sales dump (xlsx)</div>
             </div>
         </div>
 
-        <button type="submit" class="btn btn-primary btn-block"
-            style="background: linear-gradient(135deg, var(--accent), #a78bfa); font-size: 1.1rem; padding: 1.25rem;">
-            <i class="fas fa-bolt"></i> Generate Day View
+        <button type="submit" class="btn btn-primary btn-block" style="padding: var(--spacing-md) var(--spacing-lg);">
+            <i class="fa-solid fa-bolt"></i>
+            Generate Day View
         </button>
     </form>
 </div>

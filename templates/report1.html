@@ -1,48 +1,49 @@
 {% extends "base.html" %}
 
-{% block title %}Sales Report - OSG Dashboard{% endblock %}
+{% block title %}Detail Sales Report · OSG Portal{% endblock %}
 
 {% block content %}
 <div class="page-header fade-in">
-    <h1 class="page-title">Sales Report Generator</h1>
-    <p class="page-subtitle">Generate comprehensive sales reports with conversion analysis</p>
+    <h1 class="page-title">Detail Sales Report</h1>
+    <p class="page-subtitle">Generate comprehensive sales analysis with conversion metrics</p>
 </div>
 
-<div class="card fade-in" style="animation-delay: 0.2s; max-width: 1000px; margin: 0 auto;">
+<div class="card fade-in" style="animation-delay: 0.1s; max-width: 1100px; margin: 0 auto;">
     <form action="/process_report1" method="post" enctype="multipart/form-data">
 
-        <div
-            style="background: rgba(99, 102, 241, 0.1); border: 1px solid rgba(99, 102, 241, 0.2); border-radius: 1rem; padding: 1.5rem; margin-bottom: 2rem;">
-            <h3 style="color: #fff; margin-bottom: 0.5rem; font-size: 1.1rem;"><i class="fas fa-info-circle"
-                    style="color: var(--primary);"></i> Instructions</h3>
-            <ul style="color: var(--text-muted); font-size: 0.95rem; padding-left: 1.5rem; margin: 0;">
-                <li style="margin-bottom: 0.25rem;">Upload <strong>Current Month OSG Sales Data</strong> (xlsx)</li>
-                <li style="margin-bottom: 0.25rem;">Upload <strong>Previous Month OSG Sales Data</strong> (xlsx)</li>
-                <li style="margin-bottom: 0.25rem;">Upload <strong>Current Month Product Sales Data</strong> (xlsx)</li>
-                <li>Master files (Store List, RBM List) are loaded automatically.</li>
+        <div class="info-box">
+            <h3>
+                <i class="fa-solid fa-circle-info"></i>
+                Instructions
+            </h3>
+            <ul>
+                <li>Upload <strong>Current Month OSG Sales Data</strong> (xlsx)</li>
+                <li>Upload <strong>Previous Month OSG Sales Data</strong> (xlsx)</li>
+                <li>Upload <strong>Current Month Product Sales Data</strong> (xlsx)</li>
+                <li>Master files (Store List, RBM List) are loaded automatically</li>
             </ul>
         </div>
 
-        <div class="grid" style="grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 2rem;">
+        <div class="grid"
+            style="grid-template-columns: 1fr 1fr; gap: var(--spacing-lg); margin-bottom: var(--spacing-lg);">
             <div class="form-group">
                 <label class="form-label">Current Report Date</label>
                 <input type="date" name="report_date" class="form-control" required>
             </div>
             <div class="form-group">
-                <label class="form-label">Previous Report Date (Comparison)</label>
+                <label class="form-label">Previous Report Date</label>
                 <input type="date" name="prev_date" class="form-control" required>
             </div>
         </div>
 
-        <div class="grid" style="gap: 1.5rem; margin-bottom: 2rem;">
+        <div class="grid" style="gap: var(--spacing-lg); margin-bottom: var(--spacing-lg);">
             <div class="form-group">
                 <label class="form-label">Current Month OSG Sales Data</label>
                 <div class="file-upload">
                     <input type="file" name="curr_osg_file" accept=".xlsx" required>
-                    <i class="fas fa-file-excel file-icon"></i>
-                    <div class="file-name">Click or Drag to Upload</div>
-                    <div class="file-msg" style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0.25rem;">
-                        Supported format: .xlsx</div>
+                    <i class="fa-solid fa-file-excel file-icon"></i>
+                    <div class="file-name">Choose file</div>
+                    <div class="file-msg">Current month sales data</div>
                 </div>
             </div>
 
@@ -50,10 +51,9 @@
                 <label class="form-label">Previous Month OSG Sales Data</label>
                 <div class="file-upload">
                     <input type="file" name="prev_osg_file" accept=".xlsx">
-                    <i class="fas fa-history file-icon"></i>
-                    <div class="file-name">Click or Drag to Upload</div>
-                    <div class="file-msg" style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0.25rem;">
-                        Optional (for growth comparison)</div>
+                    <i class="fa-solid fa-history file-icon"></i>
+                    <div class="file-name">Choose file</div>
+                    <div class="file-msg">Optional: For growth comparison</div>
                 </div>
             </div>
 
@@ -61,16 +61,16 @@
                 <label class="form-label">Current Month Product Sales Data</label>
                 <div class="file-upload">
                     <input type="file" name="product_file" accept=".xlsx" required>
-                    <i class="fas fa-tags file-icon"></i>
-                    <div class="file-name">Click or Drag to Upload</div>
-                    <div class="file-msg" style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0.25rem;">
-                        Required for conversion rates</div>
+                    <i class="fa-solid fa-tags file-icon"></i>
+                    <div class="file-name">Choose file</div>
+                    <div class="file-msg">Required for conversion rates</div>
                 </div>
             </div>
         </div>
 
-        <button type="submit" class="btn btn-primary btn-block" style="font-size: 1.1rem; padding: 1.25rem;">
-            <i class="fas fa-wand-magic-sparkles"></i> Generate Report
+        <button type="submit" class="btn btn-primary btn-block" style="padding: var(--spacing-md) var(--spacing-lg);">
+            <i class="fa-solid fa-chart-line"></i>
+            Generate Report
         </button>
     </form>
 </div>

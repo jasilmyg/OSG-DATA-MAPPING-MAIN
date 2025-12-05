@@ -1,37 +1,41 @@
 {% extends "base.html" %}
 
-{% block title %}Data Mapping - OSG Dashboard{% endblock %}
+{% block title %}Data Mapping · OSG Portal{% endblock %}
 
 {% block content %}
-<div class="page-header">
-    <h1 class="page-title">Data Mapping Tool</h1>
-    <p class="page-subtitle">Upload OSG and Product files to process mapping</p>
+<div class="page-header fade-in">
+    <h1 class="page-title">Data Mapping</h1>
+    <p class="page-subtitle">Upload and process OSG and product data files</p>
 </div>
 
-<div class="card" style="max-width: 600px; margin: 0 auto;">
+<div class="card fade-in" style="animation-delay: 0.1s; max-width: 900px; margin: 0 auto;">
     <form action="/process_mapping" method="post" enctype="multipart/form-data">
-        <div class="form-group">
-            <label class="form-label">OSG File</label>
-            <div class="file-upload">
-                <i class="fas fa-file-excel file-icon"></i>
-                <div class="file-msg">Click to upload OSG Excel file</div>
-                <div class="file-name"></div>
-                <input type="file" name="osg_file" required accept=".xlsx, .xls">
+        <div class="grid"
+            style="grid-template-columns: 1fr 1fr; gap: var(--spacing-lg); margin-bottom: var(--spacing-lg);">
+            <div class="form-group">
+                <label class="form-label">OSG File</label>
+                <div class="file-upload">
+                    <input type="file" name="osg_file" required accept=".xlsx, .xls">
+                    <i class="fa-solid fa-table file-icon"></i>
+                    <div class="file-name">Choose file</div>
+                    <div class="file-msg">Excel format (.xlsx, .xls)</div>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Product File</label>
+                <div class="file-upload">
+                    <input type="file" name="product_file" required accept=".xlsx, .xls">
+                    <i class="fa-solid fa-boxes-stacked file-icon"></i>
+                    <div class="file-name">Choose file</div>
+                    <div class="file-msg">Excel format (.xlsx, .xls)</div>
+                </div>
             </div>
         </div>
 
-        <div class="form-group">
-            <label class="form-label">Product File</label>
-            <div class="file-upload">
-                <i class="fas fa-file-excel file-icon"></i>
-                <div class="file-msg">Click to upload Product Excel file</div>
-                <div class="file-name"></div>
-                <input type="file" name="product_file" required accept=".xlsx, .xls">
-            </div>
-        </div>
-
-        <button type="submit" class="btn btn-primary btn-block">
-            <i class="fas fa-cogs"></i> Process Files
+        <button type="submit" class="btn btn-primary btn-block" style="padding: var(--spacing-md) var(--spacing-lg);">
+            <i class="fa-solid fa-wand-magic-sparkles"></i>
+            Process Files
         </button>
     </form>
 </div>
